@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.lucene.codecs.DocValuesProducer;
 import org.apache.lucene.index.BinaryDocValues;
@@ -36,7 +37,9 @@ import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.StringHelper;
 
 /**
@@ -64,6 +67,8 @@ class Lucene3xNormsProducer extends DocValuesProducer {
   IndexInput singleNormStream;
   final int maxdoc;
   
+  private final AtomicLong ramBytesUsed;
+
   // note: just like segmentreader in 3.x, we open up all the files here (including separate norms) up front.
   // but we just don't do any seeks or reading yet.
   public Lucene3xNormsProducer(Directory dir, SegmentInfo info, FieldInfos fields, IOContext context) throws IOException {
@@ -123,6 +128,7 @@ class Lucene3xNormsProducer extends DocValuesProducer {
         IOUtils.closeWhileHandlingException(openFiles);
       }
     }
+    ramBytesUsed = new AtomicLong();
   }
   
   @Override
@@ -180,6 +186,7 @@ class Lucene3xNormsProducer extends DocValuesProducer {
           openFiles.remove(file);
           file.close();
         }
+        ramBytesUsed.addAndGet(RamUsageEstimator.sizeOf(bytes));
         instance = new NumericDocValues() {
           @Override
           public long get(int docID) {
@@ -211,5 +218,15 @@ class Lucene3xNormsProducer extends DocValuesProducer {
   @Override
   public SortedSetDocValues getSortedSet(FieldInfo field) throws IOException {
     throw new AssertionError();
+  }
+
+  @Override
+  public Bits getDocsWithField(FieldInfo field) throws IOException {
+    throw new AssertionError();
+  }
+  
+  @Override
+  public long ramBytesUsed() {
+    return ramBytesUsed.get();
   }
 }

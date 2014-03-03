@@ -19,7 +19,6 @@ package org.apache.lucene.analysis;
 
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,9 +44,11 @@ import org.apache.lucene.search.TermRangeFilter;
 import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.IndexableBinaryStringTools;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
+import org.apache.lucene.util.TestUtil;
 
 /**
  * Base test class for testing Unicode collation.
@@ -216,13 +217,13 @@ public abstract class CollationTestBase extends LuceneTestCase {
       doc.add(new Field("tracer", sortData[i][0], customType));
       doc.add(new TextField("contents", sortData[i][1], Field.Store.NO));
       if (sortData[i][2] != null) 
-        doc.add(new TextField("US", usAnalyzer.tokenStream("US", new StringReader(sortData[i][2]))));
+        doc.add(new TextField("US", usAnalyzer.tokenStream("US", sortData[i][2])));
       if (sortData[i][3] != null) 
-        doc.add(new TextField("France", franceAnalyzer.tokenStream("France", new StringReader(sortData[i][3]))));
+        doc.add(new TextField("France", franceAnalyzer.tokenStream("France", sortData[i][3])));
       if (sortData[i][4] != null)
-        doc.add(new TextField("Sweden", swedenAnalyzer.tokenStream("Sweden", new StringReader(sortData[i][4]))));
+        doc.add(new TextField("Sweden", swedenAnalyzer.tokenStream("Sweden", sortData[i][4])));
       if (sortData[i][5] != null) 
-        doc.add(new TextField("Denmark", denmarkAnalyzer.tokenStream("Denmark", new StringReader(sortData[i][5]))));
+        doc.add(new TextField("Denmark", denmarkAnalyzer.tokenStream("Denmark", sortData[i][5])));
       writer.addDocument(doc);
     }
     writer.forceMerge(1);
@@ -268,7 +269,7 @@ public abstract class CollationTestBase extends LuceneTestCase {
 
   public void assertThreadSafe(final Analyzer analyzer) throws Exception {
     int numTestPoints = 100;
-    int numThreads = _TestUtil.nextInt(random(), 3, 5);
+    int numThreads = TestUtil.nextInt(random(), 3, 5);
     final HashMap<String,BytesRef> map = new HashMap<String,BytesRef>();
     
     // create a map<String,SortKey> up front.
@@ -276,15 +277,24 @@ public abstract class CollationTestBase extends LuceneTestCase {
     // and ensure they are the same as the ones we produced in serial fashion.
 
     for (int i = 0; i < numTestPoints; i++) {
-      String term = _TestUtil.randomSimpleString(random());
-      TokenStream ts = analyzer.tokenStream("fake", new StringReader(term));
-      TermToBytesRefAttribute termAtt = ts.addAttribute(TermToBytesRefAttribute.class);
-      BytesRef bytes = termAtt.getBytesRef();
-      ts.reset();
-      assertTrue(ts.incrementToken());
-      termAtt.fillBytesRef();
-      // ensure we make a copy of the actual bytes too
-      map.put(term, BytesRef.deepCopyOf(bytes));
+      String term = TestUtil.randomSimpleString(random());
+      IOException priorException = null;
+      TokenStream ts = analyzer.tokenStream("fake", term);
+      try {
+        TermToBytesRefAttribute termAtt = ts.addAttribute(TermToBytesRefAttribute.class);
+        BytesRef bytes = termAtt.getBytesRef();
+        ts.reset();
+        assertTrue(ts.incrementToken());
+        termAtt.fillBytesRef();
+        // ensure we make a copy of the actual bytes too
+        map.put(term, BytesRef.deepCopyOf(bytes));
+        assertFalse(ts.incrementToken());
+        ts.end();
+      } catch (IOException e) {
+        priorException = e;
+      } finally {
+        IOUtils.closeWhileHandlingException(priorException, ts);
+      }
     }
     
     Thread threads[] = new Thread[numThreads];
@@ -296,13 +306,22 @@ public abstract class CollationTestBase extends LuceneTestCase {
             for (Map.Entry<String,BytesRef> mapping : map.entrySet()) {
               String term = mapping.getKey();
               BytesRef expected = mapping.getValue();
-              TokenStream ts = analyzer.tokenStream("fake", new StringReader(term));
-              TermToBytesRefAttribute termAtt = ts.addAttribute(TermToBytesRefAttribute.class);
-              BytesRef bytes = termAtt.getBytesRef();
-              ts.reset();
-              assertTrue(ts.incrementToken());
-              termAtt.fillBytesRef();
-              assertEquals(expected, bytes);
+              IOException priorException = null;
+              TokenStream ts = analyzer.tokenStream("fake", term);
+              try {
+                TermToBytesRefAttribute termAtt = ts.addAttribute(TermToBytesRefAttribute.class);
+                BytesRef bytes = termAtt.getBytesRef();
+                ts.reset();
+                assertTrue(ts.incrementToken());
+                termAtt.fillBytesRef();
+                assertEquals(expected, bytes);
+                assertFalse(ts.incrementToken());
+                ts.end();
+              } catch (IOException e) {
+                priorException = e;
+              } finally {
+                IOUtils.closeWhileHandlingException(priorException, ts);
+              }
             }
           } catch (IOException e) {
             throw new RuntimeException(e);

@@ -37,7 +37,8 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.TestUtil;
 
 public class TestKeywordAnalyzer extends BaseTokenStreamTestCase {
   
@@ -97,7 +98,7 @@ public class TestKeywordAnalyzer extends BaseTokenStreamTestCase {
     writer.close();
 
     IndexReader reader = DirectoryReader.open(dir);
-    DocsEnum td = _TestUtil.docs(random(),
+    DocsEnum td = TestUtil.docs(random(),
                                  reader,
                                  "partnum",
                                  new BytesRef("Q36"),
@@ -105,7 +106,7 @@ public class TestKeywordAnalyzer extends BaseTokenStreamTestCase {
                                  null,
                                  0);
     assertTrue(td.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
-    td = _TestUtil.docs(random(),
+    td = TestUtil.docs(random(),
                         reader,
                         "partnum",
                         new BytesRef("Q37"),
@@ -118,11 +119,17 @@ public class TestKeywordAnalyzer extends BaseTokenStreamTestCase {
   // LUCENE-1441
   public void testOffsets() throws Exception {
     TokenStream stream = new KeywordAnalyzer().tokenStream("field", new StringReader("abcd"));
-    OffsetAttribute offsetAtt = stream.addAttribute(OffsetAttribute.class);
-    stream.reset();
-    assertTrue(stream.incrementToken());
-    assertEquals(0, offsetAtt.startOffset());
-    assertEquals(4, offsetAtt.endOffset());
+    try {
+      OffsetAttribute offsetAtt = stream.addAttribute(OffsetAttribute.class);
+      stream.reset();
+      assertTrue(stream.incrementToken());
+      assertEquals(0, offsetAtt.startOffset());
+      assertEquals(4, offsetAtt.endOffset());
+      assertFalse(stream.incrementToken());
+      stream.end();
+    } finally {
+      IOUtils.closeWhileHandlingException(stream);
+    }
   }
   
   /** blast some random strings through the analyzer */

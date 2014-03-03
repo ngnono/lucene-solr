@@ -107,7 +107,7 @@ public abstract class AbstractDistribZkTestBase extends BaseDistributedSearchTes
       JettySolrRunner j = createJetty(jettyHome, null, "shard" + (i + 2));
       jettys.add(j);
       clients.add(createNewSolrServer(j.getLocalPort()));
-      sb.append("127.0.0.1:").append(j.getLocalPort()).append(context);
+      sb.append(buildUrl(j.getLocalPort()));
     }
 
     shards = sb.toString();
@@ -128,7 +128,7 @@ public abstract class AbstractDistribZkTestBase extends BaseDistributedSearchTes
   
   protected void waitForRecoveriesToFinish(String collection, ZkStateReader zkStateReader, boolean verbose, boolean failOnTimeout)
       throws Exception {
-    waitForRecoveriesToFinish(collection, zkStateReader, verbose, failOnTimeout, 230);
+    waitForRecoveriesToFinish(collection, zkStateReader, verbose, failOnTimeout, 330);
   }
   
   protected void waitForRecoveriesToFinish(String collection,
@@ -148,11 +148,10 @@ public abstract class AbstractDistribZkTestBase extends BaseDistributedSearchTes
       for (Map.Entry<String,Slice> entry : slices.entrySet()) {
         Map<String,Replica> shards = entry.getValue().getReplicasMap();
         for (Map.Entry<String,Replica> shard : shards.entrySet()) {
-          if (verbose) System.out.println("rstate:"
+          if (verbose) System.out.println("replica:" + shard.getValue().getName() + " rstate:"
               + shard.getValue().getStr(ZkStateReader.STATE_PROP)
               + " live:"
-              + clusterState.liveNodesContain(shard.getValue().getStr(
-              ZkStateReader.NODE_NAME_PROP)));
+              + clusterState.liveNodesContain(shard.getValue().getNodeName()));
           String state = shard.getValue().getStr(ZkStateReader.STATE_PROP);
           if ((state.equals(ZkStateReader.RECOVERING) || state
               .equals(ZkStateReader.SYNC) || state.equals(ZkStateReader.DOWN))

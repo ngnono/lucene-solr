@@ -41,6 +41,7 @@ import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.schema.*;
 
+import org.apache.solr.search.function.CollapseScoreFunction;
 import org.apache.solr.search.function.distance.*;
 import org.apache.solr.util.plugin.NamedListInitializedPlugin;
 
@@ -198,8 +199,8 @@ public abstract class ValueSourceParser implements NamedListInitializedPlugin {
         ValueSource source = fp.parseValueSource();
         float min = fp.parseFloat();
         float max = fp.parseFloat();
-        float target = fp.parseFloat();
-        Float def = fp.hasMoreArguments() ? fp.parseFloat() : null;
+        ValueSource target = fp.parseValueSource();
+        ValueSource def = fp.hasMoreArguments() ? fp.parseValueSource() : null;
         return new RangeMapFloatFunction(source, min, max, target, def);
       }
     });
@@ -219,6 +220,12 @@ public abstract class ValueSourceParser implements NamedListInitializedPlugin {
             return Math.abs(vals.floatVal(doc));
           }
         };
+      }
+    });
+    addParser("cscore", new ValueSourceParser() {
+      @Override
+      public ValueSource parse(FunctionQParser fp) throws SyntaxError {
+        return new CollapseScoreFunction();
       }
     });
     addParser("sum", new ValueSourceParser() {
@@ -293,7 +300,7 @@ public abstract class ValueSourceParser implements NamedListInitializedPlugin {
       }
     });
 
-    addParser("geodist", HaversineConstFunction.parser);
+    addParser("geodist", new GeoDistValueSourceParser());
 
     addParser("hsin", new ValueSourceParser() {
       @Override
@@ -309,18 +316,8 @@ public abstract class ValueSourceParser implements NamedListInitializedPlugin {
         ValueSource one = fp.parseValueSource();
         ValueSource two = fp.parseValueSource();
         if (fp.hasMoreArguments()) {
-
-
-          List<ValueSource> s1 = new ArrayList<ValueSource>();
-          s1.add(one);
-          s1.add(two);
-          pv1 = new VectorValueSource(s1);
-          ValueSource x2 = fp.parseValueSource();
-          ValueSource y2 = fp.parseValueSource();
-          List<ValueSource> s2 = new ArrayList<ValueSource>();
-          s2.add(x2);
-          s2.add(y2);
-          pv2 = new VectorValueSource(s2);
+          pv1 = new VectorValueSource(Arrays.asList(one, two));//x1, y1
+          pv2 = new VectorValueSource(Arrays.asList(fp.parseValueSource(), fp.parseValueSource()));//x2, y2
         } else {
           //check to see if we have multiValue source
           if (one instanceof MultiValueSource && two instanceof MultiValueSource){

@@ -16,18 +16,6 @@ package org.apache.solr.handler.component;
  * limitations under the License.
  */
 
-import java.net.ConnectException;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CompletionService;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-
 import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrResponse;
@@ -44,7 +32,6 @@ import org.apache.solr.common.cloud.DocCollection;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.ZkCoreNodeProps;
-import org.apache.solr.common.cloud.ZkNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -54,6 +41,18 @@ import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.request.SolrQueryRequest;
+
+import java.net.ConnectException;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 public class HttpShardHandler extends ShardHandler {
 
@@ -153,7 +152,11 @@ public class HttpShardHandler extends ShardHandler {
             String url = urls.get(0);
             srsp.setShardAddress(url);
             SolrServer server = new HttpSolrServer(url, httpClient);
-            ssr.nl = server.request(req);
+            try {
+              ssr.nl = server.request(req);
+            } finally {
+              server.shutdown();
+            }
           } else {
             LBHttpSolrServer.Rsp rsp = httpShardHandlerFactory.makeLoadBalancedRequest(req, urls);
             ssr.nl = rsp.getResponse();
@@ -162,7 +165,7 @@ public class HttpShardHandler extends ShardHandler {
         }
         catch( ConnectException cex ) {
           srsp.setException(cex); //????
-        } catch (Throwable th) {
+        } catch (Exception th) {
           srsp.setException(th);
           if (th instanceof SolrException) {
             srsp.setResponseCode(((SolrException)th).code());
@@ -277,7 +280,8 @@ public class HttpShardHandler extends ShardHandler {
         // we weren't provided with an explicit list of slices to query via "shards", so use the cluster state
 
         clusterState =  zkController.getClusterState();
-        String shardKeys = params.get(ShardParams.SHARD_KEYS);
+        String shardKeys =  params.get(ShardParams._ROUTE_);
+        if(shardKeys == null) shardKeys = params.get(ShardParams.SHARD_KEYS);//eprecated
 
         // This will be the complete list of slices we need to query for this request.
         slices = new HashMap<String,Slice>();
@@ -362,22 +366,18 @@ public class HttpShardHandler extends ShardHandler {
             Map<String, Replica> sliceShards = slice.getReplicasMap();
 
             // For now, recreate the | delimited list of equivalent servers
-            Set<String> liveNodes = clusterState.getLiveNodes();
             StringBuilder sliceShardsStr = new StringBuilder();
             boolean first = true;
-            for (ZkNodeProps nodeProps : sliceShards.values()) {
-              ZkCoreNodeProps coreNodeProps = new ZkCoreNodeProps(nodeProps);
-              if (!liveNodes.contains(coreNodeProps.getNodeName())
-                  || !coreNodeProps.getState().equals(
+            for (Replica replica : sliceShards.values()) {
+              if (!clusterState.liveNodesContain(replica.getNodeName())
+                  || !replica.getStr(ZkStateReader.STATE_PROP).equals(
                       ZkStateReader.ACTIVE)) continue;
               if (first) {
                 first = false;
               } else {
                 sliceShardsStr.append('|');
               }
-              String url = coreNodeProps.getCoreUrl();
-              if (url.startsWith("http://"))
-                url = url.substring(7);
+              String url = ZkCoreNodeProps.getCoreUrl(replica);
               sliceShardsStr.append(url);
             }
 

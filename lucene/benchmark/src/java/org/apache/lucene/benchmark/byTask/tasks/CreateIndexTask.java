@@ -97,7 +97,8 @@ public class CreateIndexTask extends PerfTask {
   }
   
   public static IndexWriterConfig createWriterConfig(Config config, PerfRunData runData, OpenMode mode, IndexCommit commit) {
-    Version version = Version.valueOf(config.get("writer.version", Version.LUCENE_40.toString()));
+    // :Post-Release-Update-Version.LUCENE_XY:
+    Version version = Version.valueOf(config.get("writer.version", Version.LUCENE_48.toString()));
     IndexWriterConfig iwConf = new IndexWriterConfig(version, runData.getAnalyzer());
     iwConf.setOpenMode(mode);
     IndexDeletionPolicy indexDeletionPolicy = getIndexDeletionPolicy(config);
@@ -119,14 +120,9 @@ public class CreateIndexTask extends PerfTask {
       
       if (mergeScheduler.equals("org.apache.lucene.index.ConcurrentMergeScheduler")) {
         ConcurrentMergeScheduler cms = (ConcurrentMergeScheduler) iwConf.getMergeScheduler();
-        int v = config.get("concurrent.merge.scheduler.max.thread.count", -1);
-        if (v != -1) {
-          cms.setMaxThreadCount(v);
-        }
-        v = config.get("concurrent.merge.scheduler.max.merge.count", -1);
-        if (v != -1) {
-          cms.setMaxMergeCount(v);
-        }
+        int maxThreadCount = config.get("concurrent.merge.scheduler.max.thread.count", ConcurrentMergeScheduler.DEFAULT_MAX_THREAD_COUNT);
+        int maxMergeCount = config.get("concurrent.merge.scheduler.max.merge.count", ConcurrentMergeScheduler.DEFAULT_MAX_MERGE_COUNT);
+        cms.setMaxMergesAndThreads(maxMergeCount, maxThreadCount);
       }
     }
 

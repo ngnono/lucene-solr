@@ -51,7 +51,7 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
@@ -71,12 +71,12 @@ public class TestTermInfosReaderIndex extends LuceneTestCase {
   @BeforeClass
   public static void beforeClass() throws Exception {
     // NOTE: turn off compound file, this test will open some index files directly.
-    LuceneTestCase.PREFLEX_IMPERSONATION_IS_ACTIVE = true;
+    LuceneTestCase.OLD_FORMAT_IMPERSONATION_IS_ACTIVE = true;
     IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT, 
         new MockAnalyzer(random(), MockTokenizer.KEYWORD, false)).setUseCompoundFile(false);
     
     termIndexInterval = config.getTermIndexInterval();
-    indexDivisor = _TestUtil.nextInt(random(), 1, 10);
+    indexDivisor = TestUtil.nextInt(random(), 1, 10);
     NUMBER_OF_DOCUMENTS = atLeast(100);
     NUMBER_OF_FIELDS = atLeast(Math.max(10, 3*termIndexInterval*indexDivisor/NUMBER_OF_DOCUMENTS));
     
@@ -97,7 +97,7 @@ public class TestTermInfosReaderIndex extends LuceneTestCase {
     r.close();
 
     FieldInfosReader infosReader = new PreFlexRWCodec().fieldInfosFormat().getFieldInfosReader();
-    FieldInfos fieldInfos = infosReader.read(directory, segment, IOContext.READONCE);
+    FieldInfos fieldInfos = infosReader.read(directory, segment, "", IOContext.READONCE);
     String segmentFileName = IndexFileNames.segmentFileName(segment, "", Lucene3xPostingsFormat.TERMS_INDEX_EXTENSION);
     long tiiFileLength = directory.fileLength(segmentFileName);
     IndexInput input = directory.openInput(segmentFileName, newIOContext(random()));

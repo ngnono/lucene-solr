@@ -47,6 +47,15 @@ import org.apache.lucene.util.BytesRef;
  */
 public class FilterAtomicReader extends AtomicReader {
 
+  /** Get the wrapped instance by <code>reader</code> as long as this reader is
+   *  an intance of {@link FilterAtomicReader}.  */
+  public static AtomicReader unwrap(AtomicReader reader) {
+    while (reader instanceof FilterAtomicReader) {
+      reader = ((FilterAtomicReader) reader).in;
+    }
+    return reader;
+  }
+
   /** Base class for filtering {@link Fields}
    *  implementations. */
   public static class FilterFields extends Fields {
@@ -125,6 +134,11 @@ public class FilterAtomicReader extends AtomicReader {
     }
 
     @Override
+    public boolean hasFreqs() {
+      return in.hasFreqs();
+    }
+
+    @Override
     public boolean hasOffsets() {
       return in.hasOffsets();
     }
@@ -157,8 +171,8 @@ public class FilterAtomicReader extends AtomicReader {
     }
 
     @Override
-    public SeekStatus seekCeil(BytesRef text, boolean useCache) throws IOException {
-      return in.seekCeil(text, useCache);
+    public SeekStatus seekCeil(BytesRef text) throws IOException {
+      return in.seekCeil(text);
     }
 
     @Override
@@ -412,6 +426,12 @@ public class FilterAtomicReader extends AtomicReader {
   public NumericDocValues getNormValues(String field) throws IOException {
     ensureOpen();
     return in.getNormValues(field);
+  }
+
+  @Override
+  public Bits getDocsWithField(String field) throws IOException {
+    ensureOpen();
+    return in.getDocsWithField(field);
   }
 
 }

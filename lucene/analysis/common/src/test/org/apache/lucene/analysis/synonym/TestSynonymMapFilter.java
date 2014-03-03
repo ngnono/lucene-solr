@@ -39,7 +39,7 @@ import org.apache.lucene.analysis.MockGraphTokenFilter;
 import org.apache.lucene.analysis.core.KeywordTokenizer;
 import org.apache.lucene.analysis.tokenattributes.*;
 import org.apache.lucene.util.CharsRef;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
 
 public class TestSynonymMapFilter extends BaseTokenStreamTestCase {
 
@@ -384,7 +384,7 @@ public class TestSynonymMapFilter extends BaseTokenStreamTestCase {
 
   public void testRandom() throws Exception {
     
-    final int alphabetSize = _TestUtil.nextInt(random(), 2, 7);
+    final int alphabetSize = TestUtil.nextInt(random(), 2, 7);
 
     final int docLen = atLeast(3000);
     //final int docLen = 50;
@@ -406,7 +406,7 @@ public class TestSynonymMapFilter extends BaseTokenStreamTestCase {
     }
     b = new SynonymMap.Builder(dedup);
     for(int synIDX=0;synIDX<numSyn;synIDX++) {
-      final String synIn = getRandomString('a', alphabetSize, _TestUtil.nextInt(random(), 1, 5)).trim();
+      final String synIn = getRandomString('a', alphabetSize, TestUtil.nextInt(random(), 1, 5)).trim();
       OneSyn s = synMap.get(synIn);
       if (s == null) {
         s = new OneSyn();
@@ -416,7 +416,7 @@ public class TestSynonymMapFilter extends BaseTokenStreamTestCase {
         synMap.put(synIn, s);
         s.keepOrig = random().nextBoolean();
       }
-      final String synOut = getRandomString('0', 10, _TestUtil.nextInt(random(), 1, 5)).trim();
+      final String synOut = getRandomString('0', 10, TestUtil.nextInt(random(), 1, 5)).trim();
       s.out.add(synOut);
       add(synIn, synOut, s.keepOrig);
       if (VERBOSE) {
@@ -473,7 +473,7 @@ public class TestSynonymMapFilter extends BaseTokenStreamTestCase {
 
   private String randomNonEmptyString() {
     while(true) {
-      final String s = _TestUtil.randomUnicodeString(random()).trim();
+      final String s = TestUtil.randomUnicodeString(random()).trim();
       if (s.length() != 0 && s.indexOf('\u0000') == -1) {
         return s;
       }
@@ -624,7 +624,7 @@ public class TestSynonymMapFilter extends BaseTokenStreamTestCase {
       "bbb => bbbb1 bbbb2\n";
       
     SolrSynonymParser parser = new SolrSynonymParser(true, true, new MockAnalyzer(random()));
-    parser.add(new StringReader(testFile));
+    parser.parse(new StringReader(testFile));
     final SynonymMap map = parser.build();
       
     Analyzer analyzer = new Analyzer() {
@@ -928,5 +928,16 @@ public class TestSynonymMapFilter extends BaseTokenStreamTestCase {
         new int[] { 0, 0, 9, 16 },
         new int[] { 8, 22, 15, 22 },
         new int[] { 1, 0, 1, 1 });
+  }
+
+  public void testEmpty() throws Exception {
+    Tokenizer tokenizer = new MockTokenizer(new StringReader("aa bb"));
+    try {
+      new SynonymFilter(tokenizer, new SynonymMap.Builder(true).build(), true);
+      fail("did not hit expected exception");
+    } catch (IllegalArgumentException iae) {
+      // expected
+      assertEquals("fst must be non-null", iae.getMessage());
+    }
   }
 }

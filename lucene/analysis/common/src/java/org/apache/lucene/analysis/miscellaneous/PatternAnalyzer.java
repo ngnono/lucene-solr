@@ -324,6 +324,7 @@ public final class PatternAnalyzer extends Analyzer {
     private final boolean toLowerCase;
     private Matcher matcher;
     private int pos = 0;
+    private boolean initialized = false;
     private static final Locale locale = Locale.getDefault();
     private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
     private final OffsetAttribute offsetAtt = addAttribute(OffsetAttribute.class);
@@ -337,6 +338,9 @@ public final class PatternAnalyzer extends Analyzer {
 
     @Override
     public final boolean incrementToken() {
+      if (!initialized) {
+        throw new IllegalStateException("Consumer did not call reset().");
+      }
       if (matcher == null) return false;
       clearAttributes();
       while (true) { // loop takes care of leading and trailing boundary cases
@@ -363,10 +367,17 @@ public final class PatternAnalyzer extends Analyzer {
     }
     
     @Override
-    public final void end() {
+    public final void end() throws IOException {
+      super.end();
       // set final offset
       final int finalOffset = correctOffset(str.length());
       this.offsetAtt.setOffset(finalOffset, finalOffset);
+    }
+
+    @Override
+    public void close() throws IOException {
+      super.close();
+      this.initialized = false;
     }
 
     @Override
@@ -375,6 +386,7 @@ public final class PatternAnalyzer extends Analyzer {
       this.str = PatternAnalyzer.toString(input);
       this.matcher = pattern.matcher(this.str);
       this.pos = 0;
+      this.initialized = true;
     }
   }
   
@@ -406,6 +418,9 @@ public final class PatternAnalyzer extends Analyzer {
 
     @Override
     public boolean incrementToken() {
+      if (str == null) {
+        throw new IllegalStateException("Consumer did not call reset().");
+      }
       clearAttributes();
       // cache loop instance vars (performance)
       String s = str;
@@ -454,7 +469,8 @@ public final class PatternAnalyzer extends Analyzer {
     }
     
     @Override
-    public final void end() {
+    public final void end() throws IOException {
+      super.end();
       // set final offset
       final int finalOffset = str.length();
       this.offsetAtt.setOffset(correctOffset(finalOffset), correctOffset(finalOffset));
@@ -466,6 +482,12 @@ public final class PatternAnalyzer extends Analyzer {
     
     private boolean isStopWord(String text) {
       return stopWords != null && stopWords.contains(text);
+    }
+
+    @Override
+    public void close() throws IOException {
+      super.close();
+      this.str = null;
     }
 
     @Override

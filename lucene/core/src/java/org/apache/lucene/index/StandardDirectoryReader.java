@@ -64,8 +64,9 @@ final class StandardDirectoryReader extends DirectoryReader {
           } catch(IOException ex) {
             prior = ex;
           } finally {
-            if (!success)
+            if (!success) {
               IOUtils.closeWhileHandlingException(prior, readers);
+            }
           }
         }
         return new StandardDirectoryReader(directory, readers, null, sis, termInfosIndexDivisor, false);
@@ -85,17 +86,16 @@ final class StandardDirectoryReader extends DirectoryReader {
 
     final SegmentInfos segmentInfos = infos.clone();
     int infosUpto = 0;
-    for (int i=0;i<numSegments;i++) {
-      IOException prior = null;
-      boolean success = false;
-      try {
+    boolean success = false;
+    try {
+      for (int i = 0; i < numSegments; i++) {
         // NOTE: important that we use infos not
         // segmentInfos here, so that we are passing the
         // actual instance of SegmentInfoPerCommit in
         // IndexWriter's segmentInfos:
-        final SegmentInfoPerCommit info = infos.info(i);
+        final SegmentCommitInfo info = infos.info(i);
         assert info.info.dir == dir;
-        final ReadersAndLiveDocs rld = writer.readerPool.get(info, true);
+        final ReadersAndUpdates rld = writer.readerPool.get(info, true);
         try {
           final SegmentReader reader = rld.getReadOnlyClone(IOContext.READ);
           if (reader.numDocs() > 0 || writer.getKeepFullyDeletedSegments()) {
@@ -103,23 +103,33 @@ final class StandardDirectoryReader extends DirectoryReader {
             readers.add(reader);
             infosUpto++;
           } else {
-            reader.close();
+            reader.decRef();
             segmentInfos.remove(infosUpto);
           }
         } finally {
           writer.readerPool.release(rld);
         }
-        success = true;
-      } catch(IOException ex) {
-        prior = ex;
-      } finally {
-        if (!success) {
-          IOUtils.closeWhileHandlingException(prior, readers);
+      }
+      
+      writer.incRefDeleter(segmentInfos);
+      
+      StandardDirectoryReader result = new StandardDirectoryReader(dir,
+          readers.toArray(new SegmentReader[readers.size()]), writer,
+          segmentInfos, writer.getConfig().getReaderTermsIndexDivisor(), applyAllDeletes);
+      success = true;
+      return result;
+    } finally {
+      if (!success) {
+        for (SegmentReader r : readers) {
+          try {
+            r.decRef();
+          } catch (Throwable th) {
+            // ignore any exception that is thrown here to not mask any original
+            // exception. 
+          }
         }
       }
     }
-    return new StandardDirectoryReader(dir, readers.toArray(new SegmentReader[readers.size()]),
-      writer, segmentInfos, writer.getConfig().getReaderTermsIndexDivisor(), applyAllDeletes);
   }
 
   /** This constructor is only used for {@link #doOpenIfChanged(SegmentInfos)} */
@@ -166,18 +176,26 @@ final class StandardDirectoryReader extends DirectoryReader {
           readerShared[i] = false;
           newReaders[i] = newReader;
         } else {
-          if (newReaders[i].getSegmentInfo().getDelGen() == infos.info(i).getDelGen()) {
+          if (newReaders[i].getSegmentInfo().getDelGen() == infos.info(i).getDelGen()
+              && newReaders[i].getSegmentInfo().getFieldInfosGen() == infos.info(i).getFieldInfosGen()) {
             // No change; this reader will be shared between
             // the old and the new one, so we must incRef
             // it:
             readerShared[i] = true;
             newReaders[i].incRef();
           } else {
+            // there are changes to the reader, either liveDocs or DV updates
             readerShared[i] = false;
             // Steal the ref returned by SegmentReader ctor:
             assert infos.info(i).info.dir == newReaders[i].getSegmentInfo().info.dir;
-            assert infos.info(i).hasDeletions();
-            newReaders[i] = new SegmentReader(infos.info(i), newReaders[i].core, IOContext.READ);
+            assert infos.info(i).hasDeletions() || infos.info(i).hasFieldUpdates();
+            if (newReaders[i].getSegmentInfo().getDelGen() == infos.info(i).getDelGen()) {
+              // only DV updates
+              newReaders[i] = new SegmentReader(infos.info(i), newReaders[i], newReaders[i].getLiveDocs(), newReaders[i].numDocs());
+            } else {
+              // both DV and liveDocs have changed
+              newReaders[i] = new SegmentReader(infos.info(i), newReaders[i]);
+            }
           }
         }
         success = true;
@@ -204,12 +222,7 @@ final class StandardDirectoryReader extends DirectoryReader {
           }
         }
         // throw the first exception
-        if (prior != null) {
-          if (prior instanceof IOException) throw (IOException) prior;
-          if (prior instanceof RuntimeException) throw (RuntimeException) prior;
-          if (prior instanceof Error) throw (Error) prior;
-          throw new RuntimeException(prior);
-        }
+        IOUtils.reThrow(prior);
       }
     }    
     return new StandardDirectoryReader(directory, newReaders, null, infos, termInfosIndexDivisor, false);
@@ -349,23 +362,22 @@ final class StandardDirectoryReader extends DirectoryReader {
       try {
         r.decRef();
       } catch (Throwable t) {
-        if (firstExc == null) firstExc = t;
+        if (firstExc == null) {
+          firstExc = t;
+        }
       }
     }
 
     if (writer != null) {
+      writer.decRefDeleter(segmentInfos);
+      
       // Since we just closed, writer may now be able to
       // delete unused files:
       writer.deletePendingFiles();
     }
 
     // throw the first exception
-    if (firstExc != null) {
-      if (firstExc instanceof IOException) throw (IOException) firstExc;
-      if (firstExc instanceof RuntimeException) throw (RuntimeException) firstExc;
-      if (firstExc instanceof Error) throw (Error) firstExc;
-      throw new RuntimeException(firstExc);
-    }
+    IOUtils.reThrow(firstExc);
   }
 
   @Override

@@ -37,7 +37,7 @@ import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.util.Version;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
 
 /**
  * Tests {@link EdgeNGramTokenFilter} for correctness.
@@ -209,15 +209,20 @@ public class EdgeNGramTokenFilterTest extends BaseTokenStreamTestCase {
   
   /** blast some random strings through the analyzer */
   public void testRandomStrings() throws Exception {
-    Analyzer a = new Analyzer() {
-      @Override
-      protected TokenStreamComponents createComponents(String fieldName, Reader reader) {
-        Tokenizer tokenizer = new MockTokenizer(reader, MockTokenizer.WHITESPACE, false);
-        return new TokenStreamComponents(tokenizer, 
-            new EdgeNGramTokenFilter(TEST_VERSION_CURRENT, tokenizer, EdgeNGramTokenFilter.Side.FRONT, 2, 4));
-      }    
-    };
-    checkRandomData(random(), a, 1000*RANDOM_MULTIPLIER);
+    for (int i = 0; i < 10; i++) {
+      final int min = TestUtil.nextInt(random(), 2, 10);
+      final int max = TestUtil.nextInt(random(), min, 20);
+    
+      Analyzer a = new Analyzer() {
+        @Override
+        protected TokenStreamComponents createComponents(String fieldName, Reader reader) {
+          Tokenizer tokenizer = new MockTokenizer(reader, MockTokenizer.WHITESPACE, false);
+          return new TokenStreamComponents(tokenizer, 
+            new EdgeNGramTokenFilter(TEST_VERSION_CURRENT, tokenizer, min, max));
+        }    
+      };
+      checkRandomData(random(), a, 100*RANDOM_MULTIPLIER);
+    }
     
     Analyzer b = new Analyzer() {
       @Override
@@ -257,7 +262,6 @@ public class EdgeNGramTokenFilterTest extends BaseTokenStreamTestCase {
     TokenStream tk = new LetterTokenizer(TEST_VERSION_CURRENT, new StringReader("abc d efgh ij klmno p q"));
     tk = new ShingleFilter(tk);
     tk = new EdgeNGramTokenFilter(TEST_VERSION_CURRENT, tk, 7, 10);
-    tk.reset();
     assertTokenStreamContents(tk,
         new String[] { "efgh ij", "ij klmn", "ij klmno", "klmno p" },
         new int[]    { 6,11,11,14 },
@@ -269,10 +273,10 @@ public class EdgeNGramTokenFilterTest extends BaseTokenStreamTestCase {
   }
 
   public void testSupplementaryCharacters() throws IOException {
-    final String s = _TestUtil.randomUnicodeString(random(), 10);
+    final String s = TestUtil.randomUnicodeString(random(), 10);
     final int codePointCount = s.codePointCount(0, s.length());
-    final int minGram = _TestUtil.nextInt(random(), 1, 3);
-    final int maxGram = _TestUtil.nextInt(random(), minGram, 10);
+    final int minGram = TestUtil.nextInt(random(), 1, 3);
+    final int maxGram = TestUtil.nextInt(random(), minGram, 10);
     TokenStream tk = new KeywordTokenizer(new StringReader(s));
     tk = new EdgeNGramTokenFilter(TEST_VERSION_CURRENT, tk, minGram, maxGram);
     final CharTermAttribute termAtt = tk.addAttribute(CharTermAttribute.class);

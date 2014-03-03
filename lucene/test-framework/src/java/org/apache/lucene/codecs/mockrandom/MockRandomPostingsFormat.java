@@ -50,6 +50,10 @@ import org.apache.lucene.codecs.sep.IntIndexOutput;
 import org.apache.lucene.codecs.sep.IntStreamFactory;
 import org.apache.lucene.codecs.sep.SepPostingsReader;
 import org.apache.lucene.codecs.sep.SepPostingsWriter;
+import org.apache.lucene.codecs.memory.FSTTermsWriter;
+import org.apache.lucene.codecs.memory.FSTTermsReader;
+import org.apache.lucene.codecs.memory.FSTOrdTermsWriter;
+import org.apache.lucene.codecs.memory.FSTOrdTermsReader;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.SegmentReadState;
@@ -60,7 +64,7 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
 
 /**
  * Randomly combines terms index impl w/ postings impls.
@@ -97,9 +101,9 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
     public MockIntStreamFactory(Random random) {
       salt = random.nextInt();
       delegates.add(new MockSingleIntFactory());
-      final int blockSize = _TestUtil.nextInt(random, 1, 2000);
+      final int blockSize = TestUtil.nextInt(random, 1, 2000);
       delegates.add(new MockFixedIntBlockPostingsFormat.MockIntFactory(blockSize));
-      final int baseBlockSize = _TestUtil.nextInt(random, 1, 127);
+      final int baseBlockSize = TestUtil.nextInt(random, 1, 127);
       delegates.add(new MockVariableIntBlockPostingsFormat.MockIntFactory(baseBlockSize));
       // TODO: others
     }
@@ -143,7 +147,7 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
 
     // we pull this before the seed intentionally: because its not consumed at runtime
     // (the skipInterval is written into postings header)
-    int skipInterval = _TestUtil.nextInt(seedRandom, minSkipInterval, 10);
+    int skipInterval = TestUtil.nextInt(seedRandom, minSkipInterval, 10);
     
     if (LuceneTestCase.VERBOSE) {
       System.out.println("MockRandomCodec: skipInterval=" + skipInterval);
@@ -179,16 +183,37 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
     }
 
     if (random.nextBoolean()) {
-      final int totTFCutoff = _TestUtil.nextInt(random, 1, 20);
+      final int totTFCutoff = TestUtil.nextInt(random, 1, 20);
       if (LuceneTestCase.VERBOSE) {
         System.out.println("MockRandomCodec: writing pulsing postings with totTFCutoff=" + totTFCutoff);
       }
-      postingsWriter = new PulsingPostingsWriter(totTFCutoff, postingsWriter);
+      postingsWriter = new PulsingPostingsWriter(state, totTFCutoff, postingsWriter);
     }
 
     final FieldsConsumer fields;
+    final int t1 = random.nextInt(4);
 
-    if (random.nextBoolean()) {
+    if (t1 == 0) {
+      boolean success = false;
+      try {
+        fields = new FSTTermsWriter(state, postingsWriter);
+        success = true;
+      } finally {
+        if (!success) {
+          postingsWriter.close();
+        }
+      }
+    } else if (t1 == 1) {
+      boolean success = false;
+      try {
+        fields = new FSTOrdTermsWriter(state, postingsWriter);
+        success = true;
+      } finally {
+        if (!success) {
+          postingsWriter.close();
+        }
+      }
+    } else if (t1 == 2) {
       // Use BlockTree terms dict
 
       if (LuceneTestCase.VERBOSE) {
@@ -197,7 +222,7 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
 
       // TODO: would be nice to allow 1 but this is very
       // slow to write
-      final int minTermsInBlock = _TestUtil.nextInt(random, 2, 100);
+      final int minTermsInBlock = TestUtil.nextInt(random, 2, 100);
       final int maxTermsInBlock = Math.max(2, (minTermsInBlock-1)*2 + random.nextInt(100));
 
       boolean success = false;
@@ -220,7 +245,7 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
       final TermsIndexWriterBase indexWriter;
       try {
         if (random.nextBoolean()) {
-          state.termIndexInterval = _TestUtil.nextInt(random, 1, 100);
+          state.termIndexInterval = TestUtil.nextInt(random, 1, 100);
           if (LuceneTestCase.VERBOSE) {
             System.out.println("MockRandomCodec: fixed-gap terms index (tii=" + state.termIndexInterval + ")");
           }
@@ -229,18 +254,18 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
           final VariableGapTermsIndexWriter.IndexTermSelector selector;
           final int n2 = random.nextInt(3);
           if (n2 == 0) {
-            final int tii = _TestUtil.nextInt(random, 1, 100);
+            final int tii = TestUtil.nextInt(random, 1, 100);
             selector = new VariableGapTermsIndexWriter.EveryNTermSelector(tii);
            if (LuceneTestCase.VERBOSE) {
               System.out.println("MockRandomCodec: variable-gap terms index (tii=" + tii + ")");
             }
           } else if (n2 == 1) {
-            final int docFreqThresh = _TestUtil.nextInt(random, 2, 100);
-            final int tii = _TestUtil.nextInt(random, 1, 100);
+            final int docFreqThresh = TestUtil.nextInt(random, 2, 100);
+            final int tii = TestUtil.nextInt(random, 1, 100);
             selector = new VariableGapTermsIndexWriter.EveryNOrDocFreqTermSelector(docFreqThresh, tii);
           } else {
             final long seed2 = random.nextLong();
-            final int gap = _TestUtil.nextInt(random, 2, 40);
+            final int gap = TestUtil.nextInt(random, 2, 40);
             if (LuceneTestCase.VERBOSE) {
              System.out.println("MockRandomCodec: random-gap terms index (max gap=" + gap + ")");
             }
@@ -297,7 +322,7 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
 
     final Random random = new Random(seed);
     
-    int readBufferSize = _TestUtil.nextInt(random, 1, 4096);
+    int readBufferSize = TestUtil.nextInt(random, 1, 4096);
     if (LuceneTestCase.VERBOSE) {
       System.out.println("MockRandomCodec: readBufferSize=" + readBufferSize);
     }
@@ -318,16 +343,36 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
     }
 
     if (random.nextBoolean()) {
-      final int totTFCutoff = _TestUtil.nextInt(random, 1, 20);
+      final int totTFCutoff = TestUtil.nextInt(random, 1, 20);
       if (LuceneTestCase.VERBOSE) {
         System.out.println("MockRandomCodec: reading pulsing postings with totTFCutoff=" + totTFCutoff);
       }
-      postingsReader = new PulsingPostingsReader(postingsReader);
+      postingsReader = new PulsingPostingsReader(state, postingsReader);
     }
 
     final FieldsProducer fields;
-
-    if (random.nextBoolean()) {
+    final int t1 = random.nextInt(4);
+    if (t1 == 0) {
+      boolean success = false;
+      try {
+        fields = new FSTTermsReader(state, postingsReader);
+        success = true;
+      } finally {
+        if (!success) {
+          postingsReader.close();
+        }
+      }
+    } else if (t1 == 1) {
+      boolean success = false;
+      try {
+        fields = new FSTOrdTermsReader(state, postingsReader);
+        success = true;
+      } finally {
+        if (!success) {
+          postingsReader.close();
+        }
+      }
+    } else if (t1 == 2) {
       // Use BlockTree terms dict
       if (LuceneTestCase.VERBOSE) {
         System.out.println("MockRandomCodec: reading BlockTree terms dict");
@@ -360,7 +405,7 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
 
         // randomness diverges from writer, here:
         if (state.termsIndexDivisor != -1) {
-          state.termsIndexDivisor = _TestUtil.nextInt(random, 1, 10);
+          state.termsIndexDivisor = TestUtil.nextInt(random, 1, 10);
         }
 
         if (doFixedGap) {
@@ -400,8 +445,6 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
         }
       }
 
-      final int termsCacheSize = _TestUtil.nextInt(random, 1, 1024);
-
       success = false;
       try {
         fields = new BlockTermsReader(indexReader,
@@ -410,7 +453,6 @@ public final class MockRandomPostingsFormat extends PostingsFormat {
                                       state.segmentInfo,
                                       postingsReader,
                                       state.context,
-                                      termsCacheSize,
                                       state.segmentSuffix);
         success = true;
       } finally {

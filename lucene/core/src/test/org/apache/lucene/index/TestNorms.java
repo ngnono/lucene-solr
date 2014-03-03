@@ -29,12 +29,14 @@ import org.apache.lucene.search.TermStatistics;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
 import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.search.similarities.TFIDFSimilarity;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LineFileDocs;
 import org.apache.lucene.util.LuceneTestCase.Slow;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
 
 /**
  * Test that norms info is preserved during index life - including
@@ -45,21 +47,29 @@ import org.apache.lucene.util._TestUtil;
 public class TestNorms extends LuceneTestCase {
   final String byteTestField = "normsTestByte";
 
-  class CustomNormEncodingSimilarity extends DefaultSimilarity {
+  class CustomNormEncodingSimilarity extends TFIDFSimilarity {
+
     @Override
-    public byte encodeNormValue(float f) {
-      return (byte) f;
+    public long encodeNormValue(float f) {
+      return (long) f;
     }
     
     @Override
-    public float decodeNormValue(byte b) {
-      return (float) b;
+    public float decodeNormValue(long norm) {
+      return norm;
     }
 
     @Override
     public float lengthNorm(FieldInvertState state) {
       return state.getLength();
     }
+
+    @Override public float coord(int overlap, int maxOverlap) { return 0; }
+    @Override public float queryNorm(float sumOfSquaredWeights) { return 0; }
+    @Override public float tf(float freq) { return 0; }
+    @Override public float idf(long docFreq, long numDocs) { return 0; }
+    @Override public float sloppyFreq(int distance) { return 0; }
+    @Override public float scorePayload(int doc, int start, int end, BytesRef payload) { return 0; }
   }
   
   // LUCENE-1260
@@ -97,7 +107,7 @@ public class TestNorms extends LuceneTestCase {
   }
   
   public void testMaxByteNorms() throws IOException {
-    Directory dir = newFSDirectory(_TestUtil.getTempDir("TestNorms.testMaxByteNorms"));
+    Directory dir = newFSDirectory(TestUtil.getTempDir("TestNorms.testMaxByteNorms"));
     buildIndex(dir);
     AtomicReader open = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir));
     NumericDocValues normValues = open.getNormValues(byteTestField);

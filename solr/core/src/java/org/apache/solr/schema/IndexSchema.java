@@ -49,6 +49,7 @@ import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
@@ -104,6 +105,7 @@ public class IndexSchema {
   private static final String AT = "@";
   private static final String DESTINATION_DYNAMIC_BASE = "destDynamicBase";
   private static final String MAX_CHARS = "maxChars";
+  private static final String SOLR_CORE_NAME = "solr.core.name";
   private static final String SOURCE_DYNAMIC_BASE = "sourceDynamicBase";
   private static final String SOURCE_EXPLICIT_FIELDS = "sourceExplicitFields";
   private static final String TEXT_FUNCTION = "text()";
@@ -309,8 +311,8 @@ public class IndexSchema {
    */
   public SchemaField getUniqueKeyField() { return uniqueKeyField; }
 
-  private String uniqueKeyFieldName;
-  private FieldType uniqueKeyFieldType;
+  protected String uniqueKeyFieldName;
+  protected FieldType uniqueKeyFieldType;
 
   /**
    * The raw (field type encoded) value of the Unique Key field for
@@ -377,6 +379,7 @@ public class IndexSchema {
     protected final HashMap<String, Analyzer> analyzers;
 
     SolrIndexAnalyzer() {
+      super(PER_FIELD_REUSE_STRATEGY);
       analyzers = analyzerCache();
     }
 
@@ -395,13 +398,11 @@ public class IndexSchema {
       return analyzer != null ? analyzer : getDynamicFieldType(fieldName).getAnalyzer();
     }
 
-    @Override
-    protected TokenStreamComponents wrapComponents(String fieldName, TokenStreamComponents components) {
-      return components;
-    }
   }
 
   private class SolrQueryAnalyzer extends SolrIndexAnalyzer {
+    SolrQueryAnalyzer() {}
+
     @Override
     protected HashMap<String, Analyzer> analyzerCache() {
       HashMap<String, Analyzer> cache = new HashMap<String, Analyzer>();
@@ -434,7 +435,7 @@ public class IndexSchema {
       // Another case where the initialization from the test harness is different than the "real world"
       sb.append("[");
       if (loader.getCoreProperties() != null) {
-        sb.append(loader.getCoreProperties().getProperty(NAME));
+        sb.append(loader.getCoreProperties().getProperty(SOLR_CORE_NAME));
       } else {
         sb.append("null");
       }
@@ -474,6 +475,12 @@ public class IndexSchema {
       similarityFactory = readSimilarity(loader, node);
       if (similarityFactory == null) {
         similarityFactory = new DefaultSimilarityFactory();
+        final NamedList similarityParams = new NamedList();
+        Version luceneVersion = getDefaultLuceneMatchVersion();
+        if (!luceneVersion.onOrAfter(Version.LUCENE_47)) {
+          similarityParams.add(DefaultSimilarityFactory.DISCOUNT_OVERLAPS, false);
+        }
+        similarityFactory.init(SolrParams.toSolrParams(similarityParams));
       } else {
         isExplicitSimilarity = true;
       }
@@ -604,10 +611,13 @@ public class IndexSchema {
         aware.inform(this);
       }
     } catch (SolrException e) {
-      throw e;
+      throw new SolrException(ErrorCode.getErrorCode(e.code()), e.getMessage() + ". Schema file is " +
+          loader.getInstanceDir() + resourceName, e);
     } catch(Exception e) {
       // unexpected exception...
-      throw new SolrException(ErrorCode.SERVER_ERROR, "Schema Parsing Failed: " + e.getMessage(), e);
+      throw new SolrException(ErrorCode.SERVER_ERROR,
+          "Schema Parsing Failed: " + e.getMessage() + ". Schema file is " + loader.getInstanceDir() + resourceName,
+          e);
     }
 
     // create the field analyzers
@@ -669,6 +679,14 @@ public class IndexSchema {
           requiredFields.add(f);
         }
       } else if (node.getNodeName().equals(DYNAMIC_FIELD)) {
+        if( f.getDefaultValue() != null ) {
+          throw new SolrException(ErrorCode.SERVER_ERROR,
+                                  DYNAMIC_FIELD + " can not have a default value: " + name);
+        }
+        if ( f.isRequired() ) {
+          throw new SolrException(ErrorCode.SERVER_ERROR,
+                                  DYNAMIC_FIELD + " can not be required: " + name);
+        }
         if (isValidFieldGlob(name)) {
           // make sure nothing else has the same path
           addDynamicField(dFields, f);
@@ -1435,13 +1453,52 @@ public class IndexSchema {
   }
 
   /**
+   * Copies this schema, adds the given field to the copy, then persists the new schema.
+   *
+   * @param newField the SchemaField to add
+   * @param copyFieldNames 0 or more names of targets to copy this field to.  The targets must already exist.
+   * @return a new IndexSchema based on this schema with newField added
+   * @see #newField(String, String, Map)
+   */
+  public IndexSchema addField(SchemaField newField, Collection<String> copyFieldNames) {
+    String msg = "This IndexSchema is not mutable.";
+    log.error(msg);
+    throw new SolrException(ErrorCode.SERVER_ERROR, msg);
+  }
+
+  /**
    * Copies this schema, adds the given fields to the copy, then persists the new schema.
    *
-   * @param newFields the SchemaFields to add 
+   * @param newFields the SchemaFields to add
    * @return a new IndexSchema based on this schema with newFields added
    * @see #newField(String, String, Map)
    */
   public IndexSchema addFields(Collection<SchemaField> newFields) {
+    String msg = "This IndexSchema is not mutable.";
+    log.error(msg);
+    throw new SolrException(ErrorCode.SERVER_ERROR, msg);
+  }
+
+  /**
+   * Copies this schema, adds the given fields to the copy, then persists the new schema.
+   *
+   * @param newFields the SchemaFields to add
+   * @param copyFieldNames 0 or more names of targets to copy this field to.  The target fields must already exist.
+   * @return a new IndexSchema based on this schema with newFields added
+   * @see #newField(String, String, Map)
+   */
+  public IndexSchema addFields(Collection<SchemaField> newFields, Map<String, Collection<String>> copyFieldNames) {
+    String msg = "This IndexSchema is not mutable.";
+    log.error(msg);
+    throw new SolrException(ErrorCode.SERVER_ERROR, msg);
+  }
+
+  /**
+   * Copies this schema and adds the new copy fields to the copy, then persists the new schema
+   * @param copyFields Key is the name of the source field name, value is a collection of target field names.  Fields must exist.
+   * @return The new Schema with the copy fields added
+   */
+  public IndexSchema addCopyFields(Map<String, Collection<String>> copyFields){
     String msg = "This IndexSchema is not mutable.";
     log.error(msg);
     throw new SolrException(ErrorCode.SERVER_ERROR, msg);

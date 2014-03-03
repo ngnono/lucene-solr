@@ -31,7 +31,7 @@ import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
 
 /** 
  * Tests special cases of BlockPostingsFormat 
@@ -44,19 +44,19 @@ public class TestBlockPostingsFormat2 extends LuceneTestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    dir = newFSDirectory(_TestUtil.getTempDir("testDFBlockSize"));
+    dir = newFSDirectory(TestUtil.getTempDir("testDFBlockSize"));
     iwc = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
-    iwc.setCodec(_TestUtil.alwaysPostingsFormat(new Lucene41PostingsFormat()));
-    iw = new RandomIndexWriter(random(), dir, iwc);
+    iwc.setCodec(TestUtil.alwaysPostingsFormat(new Lucene41PostingsFormat()));
+    iw = new RandomIndexWriter(random(), dir, iwc.clone());
     iw.setDoRandomForceMerge(false); // we will ourselves
   }
   
   @Override
   public void tearDown() throws Exception {
     iw.close();
-    _TestUtil.checkIndex(dir); // for some extra coverage, checkIndex before we forceMerge
+    TestUtil.checkIndex(dir); // for some extra coverage, checkIndex before we forceMerge
     iwc.setOpenMode(OpenMode.APPEND);
-    IndexWriter iw = new IndexWriter(dir, iwc);
+    IndexWriter iw = new IndexWriter(dir, iwc.clone());
     iw.forceMerge(1);
     iw.close();
     dir.close(); // just force a checkindex for now

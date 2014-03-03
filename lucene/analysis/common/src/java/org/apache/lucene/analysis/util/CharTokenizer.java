@@ -94,8 +94,7 @@ public abstract class CharTokenizer extends Tokenizer {
     charUtils = CharacterUtils.getInstance(matchVersion);
   }
   
-  // note: bufferIndex is -1 here to best-effort AIOOBE consumers that don't call reset()
-  private int offset = 0, bufferIndex = -1, dataLen = 0, finalOffset = 0;
+  private int offset = 0, bufferIndex = 0, dataLen = 0, finalOffset = 0;
   private static final int MAX_WORD_LEN = 255;
   private static final int IO_BUFFER_SIZE = 4096;
   
@@ -174,13 +173,15 @@ public abstract class CharTokenizer extends Tokenizer {
   }
   
   @Override
-  public final void end() {
+  public final void end() throws IOException {
+    super.end();
     // set final offset
     offsetAtt.setOffset(finalOffset, finalOffset);
   }
 
   @Override
   public void reset() throws IOException {
+    super.reset();
     bufferIndex = 0;
     offset = 0;
     dataLen = 0;

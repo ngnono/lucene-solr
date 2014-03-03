@@ -17,18 +17,6 @@
 
 package org.apache.solr.schema;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import static org.apache.lucene.analysis.util.AbstractAnalysisFactory.LUCENE_MATCH_VERSION_PARAM; 
-
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
@@ -47,6 +35,7 @@ import org.apache.lucene.search.DocTermOrdsRewriteMethod;
 import org.apache.lucene.search.FieldCacheRangeFilter;
 import org.apache.lucene.search.FieldCacheRewriteMethod;
 import org.apache.lucene.search.MultiTermQuery;
+import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TermQuery;
@@ -66,6 +55,18 @@ import org.apache.solr.search.QParser;
 import org.apache.solr.search.Sorting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.io.Reader;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.apache.lucene.analysis.util.AbstractAnalysisFactory.LUCENE_MATCH_VERSION_PARAM;
 
 /**
  * Base class for all field types used by an index schema.
@@ -425,6 +426,25 @@ public abstract class FieldType extends FieldProperties {
       }
     }
     return getClass().getName();
+  }
+
+
+  /**
+   * Returns a Query instance for doing prefix searches on this field type.
+   * Also, other QueryParser implementations may have different semantics.
+   * <p/>
+   * Sub-classes should override this method to provide their own range query implementation.
+   *
+   * @param parser       the {@link org.apache.solr.search.QParser} calling the method
+   * @param sf           the schema field
+   * @param termStr      the term string for prefix query
+   * @return a Query instance to perform prefix search
+   *
+   */
+  public Query getPrefixQuery(QParser parser, SchemaField sf, String termStr) {
+    PrefixQuery query = new PrefixQuery(new Term(sf.getName(), termStr));
+    query.setRewriteMethod(sf.getType().getRewriteMethod(parser, sf));
+    return query;
   }
 
   /**
@@ -799,6 +819,15 @@ public abstract class FieldType extends FieldProperties {
       namedPropertyValues.add(getPropertyName(TOKENIZED), isTokenized());
       // The BINARY property is always false
       // namedPropertyValues.add(getPropertyName(BINARY), hasProperty(BINARY));
+      if (null != getSimilarityFactory()) {
+        namedPropertyValues.add(SIMILARITY, getSimilarityFactory().getNamedPropertyValues());
+      }
+      if (null != getPostingsFormat()) {
+        namedPropertyValues.add(POSTINGS_FORMAT, getPostingsFormat());
+      }
+      if (null != getDocValuesFormat()) {
+        namedPropertyValues.add(DOC_VALUES_FORMAT, getDocValuesFormat());
+      }
     } else { // Don't show defaults
       Set<String> fieldProperties = new HashSet<String>();
       for (String propertyName : FieldProperties.propertyNames) {
@@ -826,15 +855,7 @@ public abstract class FieldType extends FieldProperties {
         namedPropertyValues.add(MULTI_TERM_ANALYZER, getAnalyzerProperties(((TextField) this).getMultiTermAnalyzer()));
       }
     }
-    if (null != getSimilarityFactory()) {
-      namedPropertyValues.add(SIMILARITY, getSimilarityFactory().getNamedPropertyValues());
-    }
-    if (null != getPostingsFormat()) {
-      namedPropertyValues.add(POSTINGS_FORMAT, getPostingsFormat());
-    }
-    if (null != getDocValuesFormat()) {
-      namedPropertyValues.add(DOC_VALUES_FORMAT, getDocValuesFormat());
-    }
+
     return namedPropertyValues;
   }
 
@@ -930,5 +951,21 @@ public abstract class FieldType extends FieldProperties {
       analyzerProps.add(CLASS_NAME, analyzer.getClass().getName());
     }
     return analyzerProps;
+  }
+  
+  /** 
+   * Convert a value used by the FieldComparator for this FieldType's SortField
+   * into a marshalable value for distributed sorting.
+   */
+  public Object marshalSortValue(Object value) {
+    return value;
+  }
+  
+  /**
+   * Convert a value marshaled via {@link #marshalSortValue} back 
+   * into a value usable by the FieldComparator for this FieldType's SortField
+   */
+  public Object unmarshalSortValue(Object value) {
+    return value;
   }
 }

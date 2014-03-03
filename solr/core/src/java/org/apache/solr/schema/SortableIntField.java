@@ -53,7 +53,7 @@ import java.io.IOException;
  * @deprecated use {@link IntField} or {@link TrieIntField} - will be removed in 5.x
  */
 @Deprecated
-public class SortableIntField extends PrimitiveFieldType {
+public class SortableIntField extends PrimitiveFieldType implements IntValueFieldType {
   @Override
   public SortField getSortField(SchemaField field,boolean reverse) {
     return getStringSort(field,reverse);
@@ -101,6 +101,27 @@ public class SortableIntField extends PrimitiveFieldType {
   public void write(TextResponseWriter writer, String name, IndexableField f) throws IOException {
     String sval = f.stringValue();
     writer.writeInt(name, NumberUtils.SortableStr2int(sval,0,sval.length()));
+  }
+
+  @Override
+  public Object marshalSortValue(Object value) {
+    if (null == value) { 
+      return null;
+    }
+    CharsRef chars = new CharsRef();
+    UnicodeUtil.UTF8toUTF16((BytesRef)value, chars);
+    return NumberUtils.SortableStr2int(chars.toString());
+  }
+
+  @Override
+  public Object unmarshalSortValue(Object value) {
+    if (null == value) {
+      return null;
+    }
+    String sortableString = NumberUtils.int2sortableStr(value.toString());
+    BytesRef bytes = new BytesRef();
+    UnicodeUtil.UTF16toUTF8(sortableString, 0, sortableString.length(), bytes);
+    return bytes;
   }
 }
 

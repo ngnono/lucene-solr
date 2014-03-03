@@ -4,7 +4,6 @@
 package org.apache.lucene.queryparser.xml.builders;
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -14,6 +13,7 @@ import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.queries.mlt.MoreLikeThisQuery;
 import org.apache.lucene.queryparser.xml.QueryBuilder;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.queryparser.xml.DOMUtils;
 import org.apache.lucene.queryparser.xml.ParserException;
 import org.w3c.dom.Element;
@@ -74,18 +74,20 @@ public class LikeThisQueryBuilder implements QueryBuilder {
     if ((stopWords != null) && (fields != null)) {
       stopWordsSet = new HashSet<String>();
       for (String field : fields) {
+        TokenStream ts = null;
         try {
-          TokenStream ts = analyzer.tokenStream(field, new StringReader(stopWords));
+          ts = analyzer.tokenStream(field, stopWords);
           CharTermAttribute termAtt = ts.addAttribute(CharTermAttribute.class);
           ts.reset();
           while (ts.incrementToken()) {
             stopWordsSet.add(termAtt.toString());
           }
           ts.end();
-          ts.close();
         } catch (IOException ioe) {
           throw new ParserException("IoException parsing stop words list in "
               + getClass().getName() + ":" + ioe.getLocalizedMessage());
+        } finally {
+          IOUtils.closeWhileHandlingException(ts);
         }
       }
     }

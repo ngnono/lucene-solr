@@ -19,6 +19,7 @@ package org.apache.solr.request;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.solr.SolrJettyTestBase;
+import org.apache.solr.SolrTestCaseJ4.SuppressSSL;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -27,10 +28,13 @@ import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.SolrException.ErrorCode;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -42,12 +46,21 @@ import java.net.URLEncoder;
 /**
  * See SOLR-2854.
  */
+@SuppressSSL     // does not yet work with ssl - uses raw URL
 public class TestRemoteStreaming extends SolrJettyTestBase {
 
+  private static final File solrHomeDirectory = new File(TEMP_DIR, "TestRemoteStreaming");
+  
   @BeforeClass
   public static void beforeTest() throws Exception {
     //this one has handleSelect=true which a test here needs
-    createJetty("solr/", null, null);
+    setupJettyTestHome(solrHomeDirectory, "collection1");
+    createJetty(solrHomeDirectory.getAbsolutePath(), null, null);
+  }
+
+  @AfterClass
+  public static void afterTest() throws Exception {
+    cleanUpJettyHome(solrHomeDirectory);
   }
 
   @Before
@@ -93,14 +106,18 @@ public class TestRemoteStreaming extends SolrJettyTestBase {
     return null;
   }
 
-  /** Do a select query with the stream.url. Solr should NOT access that URL, and so the data should be there. */
+  /** Do a select query with the stream.url. Solr should fail */
   @Test
   public void testNoUrlAccess() throws Exception {
     SolrQuery query = new SolrQuery();
     query.setQuery( "*:*" );//for anything
     query.add("stream.url",makeDeleteAllUrl());
-    getSolrServer().query(query);
-    assertTrue(searchFindsIt());//still there
+    try {
+      getSolrServer().query(query);
+      fail();
+    } catch (SolrException se) {
+      assertSame(ErrorCode.BAD_REQUEST, ErrorCode.getErrorCode(se.code()));
+    }
   }
 
   /** SOLR-3161

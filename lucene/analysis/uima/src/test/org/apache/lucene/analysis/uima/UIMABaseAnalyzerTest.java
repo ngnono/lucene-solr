@@ -35,7 +35,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -62,14 +61,14 @@ public class UIMABaseAnalyzerTest extends BaseTokenStreamTestCase {
 
   @Test
   public void baseUIMAAnalyzerStreamTest() throws Exception {
-    TokenStream ts = analyzer.tokenStream("text", new StringReader("the big brown fox jumped on the wood"));
+    TokenStream ts = analyzer.tokenStream("text", "the big brown fox jumped on the wood");
     assertTokenStreamContents(ts, new String[]{"the", "big", "brown", "fox", "jumped", "on", "the", "wood"});
   }
 
   @Test
   public void baseUIMAAnalyzerIntegrationTest() throws Exception {
     Directory dir = new RAMDirectory();
-    IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(Version.LUCENE_40, analyzer));
+    IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, analyzer));
     // add the first doc
     Document doc = new Document();
     String dummyTitle = "this is a dummy title ";

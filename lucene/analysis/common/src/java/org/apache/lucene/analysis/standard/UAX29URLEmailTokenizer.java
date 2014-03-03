@@ -24,6 +24,7 @@ import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.standard.std31.UAX29URLEmailTokenizerImpl31;
 import org.apache.lucene.analysis.standard.std34.UAX29URLEmailTokenizerImpl34;
 import org.apache.lucene.analysis.standard.std36.UAX29URLEmailTokenizerImpl36;
+import org.apache.lucene.analysis.standard.std40.UAX29URLEmailTokenizerImpl40;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
@@ -32,7 +33,7 @@ import org.apache.lucene.util.Version;
 
 /**
  * This class implements Word Break rules from the Unicode Text Segmentation 
- * algorithm, as specified in 
+ * algorithm, as specified in                 `
  * <a href="http://unicode.org/reports/tr29/">Unicode Standard Annex #29</a> 
  * URLs and email addresses are also tokenized according to the relevant RFCs.
  * <p/>
@@ -83,6 +84,8 @@ public final class UAX29URLEmailTokenizer extends Tokenizer {
     "<URL>",
     "<EMAIL>",
   };
+  
+  private int skippedPositions;
 
   private int maxTokenLength = StandardAnalyzer.DEFAULT_MAX_TOKEN_LENGTH;
 
@@ -116,16 +119,18 @@ public final class UAX29URLEmailTokenizer extends Tokenizer {
     this.scanner = getScannerFor(matchVersion);
   }
 
-  private static StandardTokenizerInterface getScannerFor(Version matchVersion) {
+  private StandardTokenizerInterface getScannerFor(Version matchVersion) {
     // best effort NPE if you dont call reset
-    if (matchVersion.onOrAfter(Version.LUCENE_40)) {
-      return new UAX29URLEmailTokenizerImpl(null);
+    if (matchVersion.onOrAfter(Version.LUCENE_47)) {
+      return new UAX29URLEmailTokenizerImpl(input);
+    } else if (matchVersion.onOrAfter(Version.LUCENE_40)) {
+      return new UAX29URLEmailTokenizerImpl40(input);
     } else if (matchVersion.onOrAfter(Version.LUCENE_36)) {
-      return new UAX29URLEmailTokenizerImpl36(null);
+      return new UAX29URLEmailTokenizerImpl36(input);
     } else if (matchVersion.onOrAfter(Version.LUCENE_34)) {
-      return new UAX29URLEmailTokenizerImpl34(null);
+      return new UAX29URLEmailTokenizerImpl34(input);
     } else {
-      return new UAX29URLEmailTokenizerImpl31(null);
+      return new UAX29URLEmailTokenizerImpl31(input);
     }
   }
 
@@ -139,7 +144,7 @@ public final class UAX29URLEmailTokenizer extends Tokenizer {
   @Override
   public final boolean incrementToken() throws IOException {
     clearAttributes();
-    int posIncr = 1;
+    skippedPositions = 0;
 
     while(true) {
       int tokenType = scanner.getNextToken();
@@ -149,7 +154,7 @@ public final class UAX29URLEmailTokenizer extends Tokenizer {
       }
 
       if (scanner.yylength() <= maxTokenLength) {
-        posIncrAtt.setPositionIncrement(posIncr);
+        posIncrAtt.setPositionIncrement(skippedPositions+1);
         scanner.getText(termAtt);
         final int start = scanner.yychar();
         offsetAtt.setOffset(correctOffset(start), correctOffset(start+termAtt.length()));
@@ -158,19 +163,30 @@ public final class UAX29URLEmailTokenizer extends Tokenizer {
       } else
         // When we skip a too-long term, we still increment the
         // position increment
-        posIncr++;
+        skippedPositions++;
     }
   }
   
   @Override
-  public final void end() {
+  public final void end() throws IOException {
+    super.end();
     // set final offset
     int finalOffset = correctOffset(scanner.yychar() + scanner.yylength());
     offsetAtt.setOffset(finalOffset, finalOffset);
+    // adjust any skipped tokens
+    posIncrAtt.setPositionIncrement(posIncrAtt.getPositionIncrement()+skippedPositions);
+  }
+  
+  @Override
+  public void close() throws IOException {
+    super.close();
+    scanner.yyreset(input);
   }
 
   @Override
   public void reset() throws IOException {
+    super.reset();
     scanner.yyreset(input);
+    skippedPositions = 0;
   }
 }

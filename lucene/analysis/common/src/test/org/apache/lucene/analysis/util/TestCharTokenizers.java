@@ -29,7 +29,8 @@ import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.core.LetterTokenizer;
 import org.apache.lucene.analysis.core.LowerCaseTokenizer;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.TestUtil;
 
 
 /**
@@ -122,19 +123,22 @@ public class TestCharTokenizers extends BaseTokenStreamTestCase {
     };
     int num = 1000 * RANDOM_MULTIPLIER;
     for (int i = 0; i < num; i++) {
-      String s = _TestUtil.randomUnicodeString(random());
-      TokenStream ts = analyzer.tokenStream("foo", new StringReader(s));
-      ts.reset();
-      OffsetAttribute offsetAtt = ts.addAttribute(OffsetAttribute.class);
-      while (ts.incrementToken()) {
-        String highlightedText = s.substring(offsetAtt.startOffset(), offsetAtt.endOffset());
-        for (int j = 0, cp = 0; j < highlightedText.length(); j += Character.charCount(cp)) {
-          cp = highlightedText.codePointAt(j);
-          assertTrue("non-letter:" + Integer.toHexString(cp), Character.isLetter(cp));
+      String s = TestUtil.randomUnicodeString(random());
+      TokenStream ts = analyzer.tokenStream("foo", s);
+      try {
+        ts.reset();
+        OffsetAttribute offsetAtt = ts.addAttribute(OffsetAttribute.class);
+        while (ts.incrementToken()) {
+          String highlightedText = s.substring(offsetAtt.startOffset(), offsetAtt.endOffset());
+          for (int j = 0, cp = 0; j < highlightedText.length(); j += Character.charCount(cp)) {
+            cp = highlightedText.codePointAt(j);
+            assertTrue("non-letter:" + Integer.toHexString(cp), Character.isLetter(cp));
+          }
         }
+        ts.end();
+      } finally {
+        IOUtils.closeWhileHandlingException(ts);
       }
-      ts.end();
-      ts.close();
     }
     // just for fun
     checkRandomData(random(), analyzer, num);
@@ -160,19 +164,22 @@ public class TestCharTokenizers extends BaseTokenStreamTestCase {
     };
     int num = 1000 * RANDOM_MULTIPLIER;
     for (int i = 0; i < num; i++) {
-      String s = _TestUtil.randomUnicodeString(random());
-      TokenStream ts = analyzer.tokenStream("foo", new StringReader(s));
-      ts.reset();
-      OffsetAttribute offsetAtt = ts.addAttribute(OffsetAttribute.class);
-      while (ts.incrementToken()) {
-        String highlightedText = s.substring(offsetAtt.startOffset(), offsetAtt.endOffset());
-        for (int j = 0, cp = 0; j < highlightedText.length(); j += Character.charCount(cp)) {
-          cp = highlightedText.codePointAt(j);
-          assertTrue("non-letter:" + Integer.toHexString(cp), Character.isLetter(cp));
+      String s = TestUtil.randomUnicodeString(random());
+      TokenStream ts = analyzer.tokenStream("foo", s);
+      try {
+        ts.reset();
+        OffsetAttribute offsetAtt = ts.addAttribute(OffsetAttribute.class);
+        while (ts.incrementToken()) {
+          String highlightedText = s.substring(offsetAtt.startOffset(), offsetAtt.endOffset());
+          for (int j = 0, cp = 0; j < highlightedText.length(); j += Character.charCount(cp)) {
+            cp = highlightedText.codePointAt(j);
+            assertTrue("non-letter:" + Integer.toHexString(cp), Character.isLetter(cp));
+          }
         }
+        ts.end();
+      } finally {
+        IOUtils.closeWhileHandlingException(ts);
       }
-      ts.end();
-      ts.close();
     }
     // just for fun
     checkRandomData(random(), analyzer, num);

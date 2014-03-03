@@ -19,7 +19,6 @@ package org.apache.lucene.search.vectorhighlight;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -44,6 +43,7 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase;
 
 public abstract class AbstractTestCase extends LuceneTestCase {
@@ -171,20 +171,23 @@ public abstract class AbstractTestCase extends LuceneTestCase {
   protected List<BytesRef> analyze(String text, String field, Analyzer analyzer) throws IOException {
     List<BytesRef> bytesRefs = new ArrayList<BytesRef>();
 
-    TokenStream tokenStream = analyzer.tokenStream(field, new StringReader(text));
-    TermToBytesRefAttribute termAttribute = tokenStream.getAttribute(TermToBytesRefAttribute.class);
+    TokenStream tokenStream = analyzer.tokenStream(field, text);
+    try {
+      TermToBytesRefAttribute termAttribute = tokenStream.getAttribute(TermToBytesRefAttribute.class);
 
-    BytesRef bytesRef = termAttribute.getBytesRef();
+      BytesRef bytesRef = termAttribute.getBytesRef();
 
-    tokenStream.reset();
+      tokenStream.reset();
     
-    while (tokenStream.incrementToken()) {
-      termAttribute.fillBytesRef();
-      bytesRefs.add(BytesRef.deepCopyOf(bytesRef));
-    }
+      while (tokenStream.incrementToken()) {
+        termAttribute.fillBytesRef();
+        bytesRefs.add(BytesRef.deepCopyOf(bytesRef));
+      }
 
-    tokenStream.end();
-    tokenStream.close();
+      tokenStream.end();
+    } finally {
+      IOUtils.closeWhileHandlingException(tokenStream);
+    }
 
     return bytesRefs;
   }
@@ -265,7 +268,8 @@ public abstract class AbstractTestCase extends LuceneTestCase {
     }
     
     @Override
-    public final void end(){
+    public final void end() throws IOException {
+      super.end();
       offsetAtt.setOffset(getFinalOffset(),getFinalOffset());
     }
     
@@ -319,7 +323,8 @@ public abstract class AbstractTestCase extends LuceneTestCase {
     }
     
     @Override
-    public void reset() {
+    public void reset() throws IOException {
+      super.reset();
       startTerm = 0;
       nextStartOffset = 0;
       snippet = null;

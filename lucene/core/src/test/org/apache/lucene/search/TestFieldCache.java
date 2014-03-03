@@ -60,7 +60,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
@@ -257,12 +257,13 @@ public class TestFieldCache extends LuceneTestCase {
     termsIndex = cache.getTermsIndex(reader, "bogusfield");
 
     // getTerms
-    BinaryDocValues terms = cache.getTerms(reader, "theRandomUnicodeString");
-    assertSame("Second request to cache return same array", terms, cache.getTerms(reader, "theRandomUnicodeString"));
+    BinaryDocValues terms = cache.getTerms(reader, "theRandomUnicodeString", true);
+    assertSame("Second request to cache return same array", terms, cache.getTerms(reader, "theRandomUnicodeString", true));
+    Bits bits = cache.getDocsWithField(reader, "theRandomUnicodeString");
     for (int i = 0; i < NUM_DOCS; i++) {
       terms.get(i, br);
       final BytesRef term;
-      if (br.bytes == BinaryDocValues.MISSING) {
+      if (!bits.get(i)) {
         term = null;
       } else {
         term = br;
@@ -272,7 +273,7 @@ public class TestFieldCache extends LuceneTestCase {
     }
 
     // test bad field
-    terms = cache.getTerms(reader, "bogusfield");
+    terms = cache.getTerms(reader, "bogusfield", false);
 
     // getDocTermOrds
     SortedSetDocValues termOrds = cache.getDocTermOrds(reader, "theRandomUnicodeMultiValuedField");
@@ -303,7 +304,7 @@ public class TestFieldCache extends LuceneTestCase {
     termOrds = cache.getDocTermOrds(reader, "bogusfield");
     assertTrue(termOrds.getValueCount() == 0);
 
-    FieldCache.DEFAULT.purge(reader);
+    FieldCache.DEFAULT.purgeByCacheKey(reader.getCoreCacheKey());
   }
 
   public void testEmptyIndex() throws Exception {
@@ -312,9 +313,9 @@ public class TestFieldCache extends LuceneTestCase {
     writer.close();
     IndexReader r = DirectoryReader.open(dir);
     AtomicReader reader = SlowCompositeReaderWrapper.wrap(r);
-    FieldCache.DEFAULT.getTerms(reader, "foobar");
+    FieldCache.DEFAULT.getTerms(reader, "foobar", true);
     FieldCache.DEFAULT.getTermsIndex(reader, "foobar");
-    FieldCache.DEFAULT.purge(reader);
+    FieldCache.DEFAULT.purgeByCacheKey(reader.getCoreCacheKey());
     r.close();
     dir.close();
   }
@@ -327,10 +328,10 @@ public class TestFieldCache extends LuceneTestCase {
         s = unicodeStrings[random().nextInt(i)];
       }
       if (s == null) {
-        s = _TestUtil.randomUnicodeString(random());
+        s = TestUtil.randomUnicodeString(random());
       }
     } else {
-      s = _TestUtil.randomUnicodeString(random());
+      s = TestUtil.randomUnicodeString(random());
     }
     return s;
   }
@@ -468,7 +469,7 @@ public class TestFieldCache extends LuceneTestCase {
       fail();
     } catch (IllegalStateException expected) {}
     
-    BinaryDocValues binary = FieldCache.DEFAULT.getTerms(ar, "binary");
+    BinaryDocValues binary = FieldCache.DEFAULT.getTerms(ar, "binary", true);
     binary.get(0, scratch);
     assertEquals("binary value", scratch.utf8ToString());
     
@@ -488,7 +489,7 @@ public class TestFieldCache extends LuceneTestCase {
     } catch (IllegalStateException expected) {}
     
     Bits bits = FieldCache.DEFAULT.getDocsWithField(ar, "binary");
-    assertTrue(bits instanceof Bits.MatchAllBits);
+    assertTrue(bits.get(0));
     
     // Sorted type: can be retrieved via getTerms(), getTermsIndex(), getDocTermOrds()
     try {
@@ -501,7 +502,7 @@ public class TestFieldCache extends LuceneTestCase {
       fail();
     } catch (IllegalStateException expected) {}
     
-    binary = FieldCache.DEFAULT.getTerms(ar, "sorted");
+    binary = FieldCache.DEFAULT.getTerms(ar, "sorted", true);
     binary.get(0, scratch);
     assertEquals("sorted value", scratch.utf8ToString());
     
@@ -518,14 +519,14 @@ public class TestFieldCache extends LuceneTestCase {
     assertEquals(1, sortedSet.getValueCount());
     
     bits = FieldCache.DEFAULT.getDocsWithField(ar, "sorted");
-    assertTrue(bits instanceof Bits.MatchAllBits);
+    assertTrue(bits.get(0));
     
     // Numeric type: can be retrieved via getInts() and so on
     Ints numeric = FieldCache.DEFAULT.getInts(ar, "numeric", false);
     assertEquals(42, numeric.get(0));
     
     try {
-      FieldCache.DEFAULT.getTerms(ar, "numeric");
+      FieldCache.DEFAULT.getTerms(ar, "numeric", true);
       fail();
     } catch (IllegalStateException expected) {}
     
@@ -545,7 +546,7 @@ public class TestFieldCache extends LuceneTestCase {
     } catch (IllegalStateException expected) {}
     
     bits = FieldCache.DEFAULT.getDocsWithField(ar, "numeric");
-    assertTrue(bits instanceof Bits.MatchAllBits);
+    assertTrue(bits.get(0));
     
     // SortedSet type: can be retrieved via getDocTermOrds() 
     if (defaultCodecSupportsSortedSet()) {
@@ -555,7 +556,7 @@ public class TestFieldCache extends LuceneTestCase {
       } catch (IllegalStateException expected) {}
     
       try {
-        FieldCache.DEFAULT.getTerms(ar, "sortedset");
+        FieldCache.DEFAULT.getTerms(ar, "sortedset", true);
         fail();
       } catch (IllegalStateException expected) {}
     
@@ -577,7 +578,7 @@ public class TestFieldCache extends LuceneTestCase {
       assertEquals(2, sortedSet.getValueCount());
     
       bits = FieldCache.DEFAULT.getDocsWithField(ar, "sortedset");
-      assertTrue(bits instanceof Bits.MatchAllBits);
+      assertTrue(bits.get(0));
     }
     
     ir.close();
@@ -617,14 +618,14 @@ public class TestFieldCache extends LuceneTestCase {
     assertEquals(0, doubles.get(0), 0.0D);
     
     BytesRef scratch = new BytesRef();
-    BinaryDocValues binaries = cache.getTerms(ar, "bogusterms");
+    BinaryDocValues binaries = cache.getTerms(ar, "bogusterms", true);
     binaries.get(0, scratch);
-    assertTrue(scratch.bytes == BinaryDocValues.MISSING);
+    assertEquals(0, scratch.length);
     
     SortedDocValues sorted = cache.getTermsIndex(ar, "bogustermsindex");
     assertEquals(-1, sorted.getOrd(0));
     sorted.get(0, scratch);
-    assertTrue(scratch.bytes == BinaryDocValues.MISSING);
+    assertEquals(0, scratch.length);
     
     SortedSetDocValues sortedSet = cache.getDocTermOrds(ar, "bogusmultivalued");
     sortedSet.setDocument(0);
@@ -682,14 +683,14 @@ public class TestFieldCache extends LuceneTestCase {
     assertEquals(0, doubles.get(0), 0.0D);
     
     BytesRef scratch = new BytesRef();
-    BinaryDocValues binaries = cache.getTerms(ar, "bogusterms");
+    BinaryDocValues binaries = cache.getTerms(ar, "bogusterms", true);
     binaries.get(0, scratch);
-    assertTrue(scratch.bytes == BinaryDocValues.MISSING);
+    assertEquals(0, scratch.length);
     
     SortedDocValues sorted = cache.getTermsIndex(ar, "bogustermsindex");
     assertEquals(-1, sorted.getOrd(0));
     sorted.get(0, scratch);
-    assertTrue(scratch.bytes == BinaryDocValues.MISSING);
+    assertEquals(0, scratch.length);
     
     SortedSetDocValues sortedSet = cache.getDocTermOrds(ar, "bogusmultivalued");
     sortedSet.setDocument(0);
@@ -709,11 +710,11 @@ public class TestFieldCache extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig cfg = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
     cfg.setMergePolicy(newLogMergePolicy());
-    RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, cfg);
     Document doc = new Document();
     LongField field = new LongField("f", 0L, Store.YES);
     doc.add(field);
-    final long[] values = new long[_TestUtil.nextInt(random(), 1, 10)];
+    final long[] values = new long[TestUtil.nextInt(random(), 1, 10)];
     for (int i = 0; i < values.length; ++i) {
       final long v;
       switch (random().nextInt(10)) {
@@ -727,7 +728,7 @@ public class TestFieldCache extends LuceneTestCase {
           v = Long.MAX_VALUE;
           break;
         default:
-          v = _TestUtil.nextLong(random(), -10, 10);
+          v = TestUtil.nextLong(random(), -10, 10);
           break;
       }
       values[i] = v;
@@ -755,11 +756,11 @@ public class TestFieldCache extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig cfg = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
     cfg.setMergePolicy(newLogMergePolicy());
-    RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, cfg);
     Document doc = new Document();
     IntField field = new IntField("f", 0, Store.YES);
     doc.add(field);
-    final int[] values = new int[_TestUtil.nextInt(random(), 1, 10)];
+    final int[] values = new int[TestUtil.nextInt(random(), 1, 10)];
     for (int i = 0; i < values.length; ++i) {
       final int v;
       switch (random().nextInt(10)) {
@@ -773,7 +774,7 @@ public class TestFieldCache extends LuceneTestCase {
           v = Integer.MAX_VALUE;
           break;
         default:
-          v = _TestUtil.nextInt(random(), -10, 10);
+          v = TestUtil.nextInt(random(), -10, 10);
           break;
       }
       values[i] = v;

@@ -24,8 +24,8 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.lucene.util.LuceneTestCase.BadApple;
 import org.apache.lucene.util.LuceneTestCase.Slow;
-import org.apache.lucene.util.Constants;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -33,7 +33,6 @@ import org.apache.solr.client.solrj.impl.HttpSolrServer;
 import org.apache.solr.client.solrj.request.CoreAdminRequest.Create;
 import org.apache.solr.client.solrj.request.CoreAdminRequest.Unload;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.ZkCoreNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -46,12 +45,12 @@ import org.junit.BeforeClass;
  * This test simply does a bunch of basic things in solrcloud mode and asserts things
  * work as expected.
  */
-@Slow
+@Slow @BadApple
 public class UnloadDistributedZkTest extends BasicDistributedZkTest {
   
   @BeforeClass
   public static void beforeThisClass3() throws Exception {
-    assumeFalse("FIXME: This test fails under Java 8 all the time, see SOLR-4711", Constants.JRE_IS_MINIMUM_JAVA8);
+ 
   }
   
   @Before
@@ -91,14 +90,14 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     createCmd.setCollection(collection);
     String coreDataDir = dataDir.getAbsolutePath() + File.separator
         + System.currentTimeMillis() + collection + "1";
-    createCmd.setDataDir(coreDataDir);
+    createCmd.setDataDir(getDataDir(coreDataDir));
     createCmd.setNumShards(2);
     
     SolrServer client = clients.get(0);
     String url1 = getBaseUrl(client);
     HttpSolrServer server = new HttpSolrServer(url1);
     server.setConnectionTimeout(15000);
-    server.setSoTimeout(30000);
+    server.setSoTimeout(60000);
     server.request(createCmd);
     
     createCmd = new Create();
@@ -107,7 +106,7 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     createCmd.setCollection(collection);
     coreDataDir = dataDir.getAbsolutePath() + File.separator
         + System.currentTimeMillis() + collection + "2";
-    createCmd.setDataDir(coreDataDir);
+    createCmd.setDataDir(getDataDir(coreDataDir));
     
     server.request(createCmd);
     
@@ -120,21 +119,17 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     server.request(unloadCmd);
     
     // there should be only one shard
-    Slice shard2 = getCommonCloudSolrServer().getZkStateReader().getClusterState().getSlice(collection, "shard2");
+    int slices = getCommonCloudSolrServer().getZkStateReader().getClusterState().getSlices(collection).size();
     long timeoutAt = System.currentTimeMillis() + 45000;
-    while (shard2 != null) {
+    while (slices != 1) {
       if (System.currentTimeMillis() > timeoutAt) {
         printLayout();
-        fail("Still found shard2 in collection " + collection);
+        fail("Expected to find only one slice in " + collection);
       }
       
       Thread.sleep(1000);
-      shard2 = getCommonCloudSolrServer().getZkStateReader().getClusterState().getSlice(collection, "shard2");
+      slices = getCommonCloudSolrServer().getZkStateReader().getClusterState().getSlices(collection).size();
     }
-
-    Slice shard1 = getCommonCloudSolrServer().getZkStateReader().getClusterState().getSlice(collection, "shard1");
-    assertNotNull(shard1);
-    assertTrue(getCommonCloudSolrServer().getZkStateReader().getClusterState().getCollections().contains(collection));
     
     // now unload one of the other
     unloadCmd = new Unload(false);
@@ -144,7 +139,7 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     //printLayout();
     // the collection should be gone
     timeoutAt = System.currentTimeMillis() + 30000;
-    while (getCommonCloudSolrServer().getZkStateReader().getClusterState().getCollections().contains(collection)) {
+    while (getCommonCloudSolrServer().getZkStateReader().getClusterState().hasCollection(collection)) {
       if (System.currentTimeMillis() > timeoutAt) {
         printLayout();
         fail("Still found collection");
@@ -164,21 +159,21 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     String url1 = getBaseUrl(client);
     HttpSolrServer server = new HttpSolrServer(url1);
     server.setConnectionTimeout(15000);
-    server.setSoTimeout(30000);
+    server.setSoTimeout(60000);
     
     Create createCmd = new Create();
     createCmd.setCoreName("unloadcollection1");
     createCmd.setCollection("unloadcollection");
     createCmd.setNumShards(1);
     String core1DataDir = dataDir.getAbsolutePath() + File.separator + System.currentTimeMillis() + "unloadcollection1" + "_1n";
-    createCmd.setDataDir(core1DataDir);
+    createCmd.setDataDir(getDataDir(core1DataDir));
     server.request(createCmd);
     
     ZkStateReader zkStateReader = getCommonCloudSolrServer().getZkStateReader();
     
     zkStateReader.updateClusterState(true);
 
-    int slices = zkStateReader.getClusterState().getCollectionStates().get("unloadcollection").getSlices().size();
+    int slices = zkStateReader.getClusterState().getCollection("unloadcollection").getSlices().size();
     assertEquals(1, slices);
     
     client = clients.get(1);
@@ -189,11 +184,11 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     createCmd.setCoreName("unloadcollection2");
     createCmd.setCollection("unloadcollection");
     String core2dataDir = dataDir.getAbsolutePath() + File.separator + System.currentTimeMillis() + "unloadcollection1" + "_2n";
-    createCmd.setDataDir(core2dataDir);
+    createCmd.setDataDir(getDataDir(core2dataDir));
     server.request(createCmd);
     
     zkStateReader.updateClusterState(true);
-    slices = zkStateReader.getClusterState().getCollectionStates().get("unloadcollection").getSlices().size();
+    slices = zkStateReader.getClusterState().getCollection("unloadcollection").getSlices().size();
     assertEquals(1, slices);
     
     waitForRecoveriesToFinish("unloadcollection", zkStateReader, false);
@@ -227,7 +222,7 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     createCmd.setCoreName("unloadcollection3");
     createCmd.setCollection("unloadcollection");
     String core3dataDir = dataDir.getAbsolutePath() + File.separator + System.currentTimeMillis() + "unloadcollection" + "_3n";
-    createCmd.setDataDir(core3dataDir);
+    createCmd.setDataDir(getDataDir(core3dataDir));
     server.request(createCmd);
     
     waitForRecoveriesToFinish("unloadcollection", zkStateReader, false);
@@ -236,8 +231,8 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     DirectUpdateHandler2.commitOnClose = false;
     
     HttpSolrServer addClient = new HttpSolrServer(url3 + "/unloadcollection3");
-    addClient.setConnectionTimeout(15000);
-    addClient.setSoTimeout(30000);
+    addClient.setConnectionTimeout(30000);
+
     // add a few docs
     for (int x = 20; x < 100; x++) {
       SolrInputDocument doc1 = getDoc(id, x, i1, -600, tlong, 600, t1,
@@ -274,8 +269,8 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     zkStateReader.getLeaderRetry("unloadcollection", "shard1", 15000);
     
     addClient = new HttpSolrServer(url2 + "/unloadcollection2");
-    addClient.setConnectionTimeout(15000);
-    addClient.setSoTimeout(30000);
+    addClient.setConnectionTimeout(30000);
+    addClient.setSoTimeout(90000);
     
     // add a few docs while the leader is down
     for (int x = 101; x < 200; x++) {
@@ -296,7 +291,7 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     createCmd.setCoreName("unloadcollection4");
     createCmd.setCollection("unloadcollection");
     String core4dataDir = dataDir.getAbsolutePath() + File.separator + System.currentTimeMillis() + "unloadcollection" + "_4n";
-    createCmd.setDataDir(core4dataDir);
+    createCmd.setDataDir(getDataDir(core4dataDir));
     server.request(createCmd);
     
     waitForRecoveriesToFinish("unloadcollection", zkStateReader, false);
@@ -334,7 +329,7 @@ public class UnloadDistributedZkTest extends BasicDistributedZkTest {
     createCmd = new Create();
     createCmd.setCoreName(leaderProps.getCoreName());
     createCmd.setCollection("unloadcollection");
-    createCmd.setDataDir(core1DataDir);
+    createCmd.setDataDir(getDataDir(core1DataDir));
     server.request(createCmd);
 
     waitForRecoveriesToFinish("unloadcollection", zkStateReader, false);

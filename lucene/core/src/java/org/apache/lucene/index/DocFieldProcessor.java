@@ -85,7 +85,7 @@ final class DocFieldProcessor extends DocConsumer {
     // FreqProxTermsWriter does this with
     // FieldInfo.storePayload.
     FieldInfosWriter infosWriter = codec.fieldInfosFormat().getFieldInfosWriter();
-    infosWriter.write(state.directory, state.segmentInfo.name, state.fieldInfos, IOContext.DEFAULT);
+    infosWriter.write(state.directory, state.segmentInfo.name, "", state.fieldInfos, IOContext.DEFAULT);
   }
 
   @Override
@@ -210,7 +210,10 @@ final class DocFieldProcessor extends DocConsumer {
           rehash();
         }
       } else {
-        fp.fieldInfo.update(field.fieldType());
+        // need to addOrUpdate so that FieldInfos can update globalFieldNumbers
+        // with the correct DocValue type (LUCENE-5192)
+        FieldInfo fi = fieldInfos.addOrUpdate(fieldName, field.fieldType());
+        assert fi == fp.fieldInfo : "should only have updated an existing FieldInfo instance";
       }
 
       if (thisFieldGen != fp.lastGen) {

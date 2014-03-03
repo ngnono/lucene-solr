@@ -26,7 +26,7 @@ import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
 
 public class TestIndexWriterForceMerge extends LuceneTestCase {
   public void testPartialMerge() throws IOException {
@@ -36,7 +36,7 @@ public class TestIndexWriterForceMerge extends LuceneTestCase {
     final Document doc = new Document();
     doc.add(newStringField("content", "aaa", Field.Store.NO));
     final int incrMin = TEST_NIGHTLY ? 15 : 40;
-    for(int numDocs=10;numDocs<500;numDocs += _TestUtil.nextInt(random(), incrMin, 5*incrMin)) {
+    for(int numDocs=10;numDocs<500;numDocs += TestUtil.nextInt(random(), incrMin, 5 * incrMin)) {
       LogDocMergePolicy ldmp = new LogDocMergePolicy();
       ldmp.setMinMergeDocs(1);
       ldmp.setMergeFactor(5);
@@ -83,7 +83,7 @@ public class TestIndexWriterForceMerge extends LuceneTestCase {
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
       TEST_VERSION_CURRENT, new MockAnalyzer(random()))
       .setMaxBufferedDocs(2).setMergePolicy(ldmp).setMergeScheduler(new ConcurrentMergeScheduler()));
-
+    
     for(int iter=0;iter<10;iter++) {
       for(int i=0;i<19;i++)
         writer.addDocument(doc);
@@ -96,7 +96,6 @@ public class TestIndexWriterForceMerge extends LuceneTestCase {
       sis.read(dir);
 
       final int segCount = sis.size();
-
       writer.forceMerge(7);
       writer.commit();
       writer.waitForMerges();
@@ -108,7 +107,7 @@ public class TestIndexWriterForceMerge extends LuceneTestCase {
       if (segCount < 7)
         assertEquals(segCount, optSegCount);
       else
-        assertEquals(7, optSegCount);
+        assertEquals("seg: " + segCount, 7, optSegCount);
     }
     writer.close();
     dir.close();

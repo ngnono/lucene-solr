@@ -30,7 +30,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.lucene.analysis.*;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.MockAnalyzer;
+import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
@@ -43,7 +45,8 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
+import org.apache.lucene.util.TestUtil;
 
 public class TestIndexWriterDelete extends LuceneTestCase {
 
@@ -322,7 +325,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
           int value = 100;
           try {
             latch.await();
-            for (int i = 0; i < 1000; i++) {
+            for (int j = 0; j < 1000; j++) {
               Document doc = new Document();
               doc.add(newTextField("content", "aaa", Field.Store.NO));
               doc.add(newStringField("id", String.valueOf(id++), Field.Store.YES));
@@ -639,7 +642,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
         // If the close() succeeded, make sure there are
         // no unreferenced files.
         if (success) {
-          _TestUtil.checkIndex(dir);
+          TestUtil.checkIndex(dir);
           TestIndexWriter.assertNoUnreferencedFiles(dir, "after writer.close");
         }
         dir.setRandomIOExceptionRate(randomIOExceptionRate);
@@ -735,7 +738,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
             boolean seen = false;
             StackTraceElement[] trace = new Exception().getStackTrace();
             for (int i = 0; i < trace.length; i++) {
-              if ("applyDeletes".equals(trace[i].getMethodName())) {
+              if ("applyDeletesAndUpdates".equals(trace[i].getMethodName())) {
                 seen = true;
                 break;
               }
@@ -753,7 +756,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
           if (!failed) {
             StackTraceElement[] trace = new Exception().getStackTrace();
             for (int i = 0; i < trace.length; i++) {
-              if ("applyDeletes".equals(trace[i].getMethodName())) {
+              if ("applyDeletesAndUpdates".equals(trace[i].getMethodName())) {
                 if (VERBOSE) {
                   System.out.println("TEST: mock failure: saw applyDeletes");
                   new Throwable().printStackTrace(System.out);
@@ -961,7 +964,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
     int upto = 0;
     while(upto < ids.size()) {
       final int left = ids.size() - upto;
-      final int inc = Math.min(left, _TestUtil.nextInt(random(), 1, 20));
+      final int inc = Math.min(left, TestUtil.nextInt(random(), 1, 20));
       final int limit = upto + inc;
       while(upto < limit) {
         w.deleteDocuments(new Term("id", ""+ids.get(upto++)));
@@ -978,7 +981,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
   public void testIndexingThenDeleting() throws Exception {
     // TODO: move this test to its own class and just @SuppressCodecs?
     // TODO: is it enough to just use newFSDirectory?
-    final String fieldFormat = _TestUtil.getPostingsFormat("field");
+    final String fieldFormat = TestUtil.getPostingsFormat("field");
     assumeFalse("This test cannot run with Memory codec", fieldFormat.equals("Memory"));
     assumeFalse("This test cannot run with SimpleText codec", fieldFormat.equals("SimpleText"));
     assumeFalse("This test cannot run with Direct codec", fieldFormat.equals("Direct"));
@@ -1132,7 +1135,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
     while(true) {
       StringBuilder sb = new StringBuilder();
       for(int termIDX=0;termIDX<100;termIDX++) {
-        sb.append(' ').append(_TestUtil.randomRealisticUnicodeString(random()));
+        sb.append(' ').append(TestUtil.randomRealisticUnicodeString(random()));
       }
       if (id == 500) {
         w.deleteDocuments(new Term("id", "0"));
@@ -1162,7 +1165,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriterConfig iwc = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
     iwc.setMaxBufferedDocs(2);
-    IndexWriter w = new IndexWriter(dir, iwc);
+    IndexWriter w = new IndexWriter(dir, iwc.clone());
     Document doc = new Document();
     doc.add(newField("field", "0", StringField.TYPE_NOT_STORED));
     w.addDocument(doc);
@@ -1187,7 +1190,7 @@ public class TestIndexWriterDelete extends LuceneTestCase {
 
     // Segment should have deletions:
     assertTrue(s.contains("has deletions"));
-    w = new IndexWriter(dir, iwc);
+    w = new IndexWriter(dir, iwc.clone());
     w.forceMerge(1);
     w.close();
 

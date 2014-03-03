@@ -24,6 +24,8 @@ import java.util.Iterator;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.codecs.Codec;
+import org.apache.lucene.codecs.lucene3x.Lucene3xCodec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.FieldInfo.DocValuesType;
@@ -36,7 +38,7 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util._TestUtil;
+import org.apache.lucene.util.TestUtil;
 
 public class TestIndexableField extends LuceneTestCase {
 
@@ -76,7 +78,7 @@ public class TestIndexableField extends LuceneTestCase {
       
       @Override
       public boolean storeTermVectorPayloads() {
-        if (PREFLEX_IMPERSONATION_IS_ACTIVE) {
+        if (Codec.getDefault() instanceof Lucene3xCodec) {
           return false; // 3.x doesnt support
         } else {
           return storeTermVectors() && counter % 10 != 9;
@@ -177,7 +179,7 @@ public class TestIndexableField extends LuceneTestCase {
     int baseCount = 0;
 
     for(int docCount=0;docCount<NUM_DOCS;docCount++) {
-      final int fieldCount = _TestUtil.nextInt(random(), 1, 17);
+      final int fieldCount = TestUtil.nextInt(random(), 1, 17);
       fieldsPerDoc[docCount] = fieldCount-1;
 
       final int finalDocCount = docCount;

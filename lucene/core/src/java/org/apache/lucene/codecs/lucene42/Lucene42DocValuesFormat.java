@@ -118,18 +118,45 @@ import org.apache.lucene.util.packed.BlockPackedWriter;
  *   <p>SortedSet entries store the list of ordinals in their BinaryData as a
  *      sequences of increasing {@link DataOutput#writeVLong vLong}s, delta-encoded.</p>       
  * </ol>
+ * <p>
+ * Limitations:
+ * <ul>
+ *   <li> Binary doc values can be at most {@link #MAX_BINARY_FIELD_LENGTH} in length.
+ * </ul>
+ * @deprecated Only for reading old 4.2 segments
  */
-public final class Lucene42DocValuesFormat extends DocValuesFormat {
+@Deprecated
+public class Lucene42DocValuesFormat extends DocValuesFormat {
 
-  /** Sole constructor */
+  /** Maximum length for each binary doc values field. */
+  public static final int MAX_BINARY_FIELD_LENGTH = (1 << 15) - 2;
+  
+  final float acceptableOverheadRatio;
+  
+  /** 
+   * Calls {@link #Lucene42DocValuesFormat(float) 
+   * Lucene42DocValuesFormat(PackedInts.DEFAULT)} 
+   */
   public Lucene42DocValuesFormat() {
+    this(PackedInts.DEFAULT);
+  }
+  
+  /**
+   * Creates a new Lucene42DocValuesFormat with the specified
+   * <code>acceptableOverheadRatio</code> for NumericDocValues.
+   * @param acceptableOverheadRatio compression parameter for numerics. 
+   *        Currently this is only used when the number of unique values is small.
+   *        
+   * @lucene.experimental
+   */
+  public Lucene42DocValuesFormat(float acceptableOverheadRatio) {
     super("Lucene42");
+    this.acceptableOverheadRatio = acceptableOverheadRatio;
   }
 
   @Override
   public DocValuesConsumer fieldsConsumer(SegmentWriteState state) throws IOException {
-    // note: we choose DEFAULT here (its reasonably fast, and for small bpv has tiny waste)
-    return new Lucene42DocValuesConsumer(state, DATA_CODEC, DATA_EXTENSION, METADATA_CODEC, METADATA_EXTENSION, PackedInts.DEFAULT);
+    throw new UnsupportedOperationException("this codec can only be used for reading");
   }
   
   @Override
@@ -137,8 +164,8 @@ public final class Lucene42DocValuesFormat extends DocValuesFormat {
     return new Lucene42DocValuesProducer(state, DATA_CODEC, DATA_EXTENSION, METADATA_CODEC, METADATA_EXTENSION);
   }
   
-  private static final String DATA_CODEC = "Lucene42DocValuesData";
-  private static final String DATA_EXTENSION = "dvd";
-  private static final String METADATA_CODEC = "Lucene42DocValuesMetadata";
-  private static final String METADATA_EXTENSION = "dvm";
+  static final String DATA_CODEC = "Lucene42DocValuesData";
+  static final String DATA_EXTENSION = "dvd";
+  static final String METADATA_CODEC = "Lucene42DocValuesMetadata";
+  static final String METADATA_EXTENSION = "dvm";
 }

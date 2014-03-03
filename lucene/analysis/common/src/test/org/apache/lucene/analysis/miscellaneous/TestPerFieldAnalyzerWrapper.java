@@ -1,7 +1,6 @@
 package org.apache.lucene.analysis.miscellaneous;
 
 import java.io.Reader;
-import java.io.StringReader;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -10,6 +9,7 @@ import org.apache.lucene.analysis.*;
 import org.apache.lucene.analysis.core.SimpleAnalyzer;
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.util.IOUtils;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -38,25 +38,35 @@ public class TestPerFieldAnalyzerWrapper extends BaseTokenStreamTestCase {
     PerFieldAnalyzerWrapper analyzer =
               new PerFieldAnalyzerWrapper(new WhitespaceAnalyzer(TEST_VERSION_CURRENT), analyzerPerField);
 
-    TokenStream tokenStream = analyzer.tokenStream("field",
-        new StringReader(text));
-    CharTermAttribute termAtt = tokenStream.getAttribute(CharTermAttribute.class);
-    tokenStream.reset();
+    TokenStream tokenStream = analyzer.tokenStream("field", text);
+    try {
+      CharTermAttribute termAtt = tokenStream.getAttribute(CharTermAttribute.class);
+      tokenStream.reset();
 
-    assertTrue(tokenStream.incrementToken());
-    assertEquals("WhitespaceAnalyzer does not lowercase",
+      assertTrue(tokenStream.incrementToken());
+      assertEquals("WhitespaceAnalyzer does not lowercase",
                  "Qwerty",
                  termAtt.toString());
+      assertFalse(tokenStream.incrementToken());
+      tokenStream.end();
+    } finally {
+      IOUtils.closeWhileHandlingException(tokenStream);
+    }
 
-    tokenStream = analyzer.tokenStream("special",
-        new StringReader(text));
-    termAtt = tokenStream.getAttribute(CharTermAttribute.class);
-    tokenStream.reset();
+    tokenStream = analyzer.tokenStream("special", text);
+    try {
+      CharTermAttribute termAtt = tokenStream.getAttribute(CharTermAttribute.class);
+      tokenStream.reset();
 
-    assertTrue(tokenStream.incrementToken());
-    assertEquals("SimpleAnalyzer lowercases",
+      assertTrue(tokenStream.incrementToken());
+      assertEquals("SimpleAnalyzer lowercases",
                  "qwerty",
                  termAtt.toString());
+      assertFalse(tokenStream.incrementToken());
+      tokenStream.end();
+    } finally {
+      IOUtils.closeWhileHandlingException(tokenStream);
+    }
   }
   
   public void testCharFilters() throws Exception {
